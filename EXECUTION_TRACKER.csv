@@ -1,0 +1,52 @@
+Epic,Story,Task,Owner Role,Est (days),Dependencies
+Foundations and RBAC,Access model,Define role matrix and branch scoping rules,Product,1,None
+Foundations and RBAC,Access model,"Ecto schemas for org, branch, user, role, permission",Backend Eng,2,Role matrix
+Foundations and RBAC,Access model,JWT auth and refresh endpoints,Backend Eng,2,Core schemas
+Foundations and RBAC,Access model,RBAC policy middleware and branch scoping,Backend Eng,2,Auth endpoints
+Foundations and RBAC,Access model,Web app shell and login,Web Eng,2,Auth endpoints
+Foundations and RBAC,Access model,Android login and session persistence,Android Eng,2,Auth endpoints
+Lead intake and assignment,CSV import,"CSV template and mapping UI (student_name, phone_number) + university selection",Web Eng/Design,2,Web shell
+Lead intake and assignment,CSV import,Import job pipeline with validation + set university,Backend Eng,2,Lead schema
+Lead intake and assignment,CSV import,Dedupe rules and merge strategy,Backend Eng,2,Import pipeline
+Lead intake and assignment,CSV import,Import status and error UI,Web Eng,1,Import pipeline
+Lead intake and assignment,Assignment rules,Assignment rule model and CRUD API,Backend Eng,2,Lead schema
+Lead intake and assignment,Assignment rules,"Rule engine (round-robin, capacity, university)",Backend Eng,2,Rule model
+Lead intake and assignment,Assignment rules,Assignment UI and bulk assign,Web Eng,2,Rule engine
+Lead intake and assignment,Assignment rules,Lead aging and auto-reassignment job,Backend Eng,1,Rule engine
+Lead lifecycle and CRM,Lead management,Lead CRUD and status transitions API,Backend Eng,2,Core schemas
+Lead lifecycle and CRM,Lead management,Lead activity log and notes API,Backend Eng,2,Lead CRUD
+Lead lifecycle and CRM,Follow-ups,Follow-up scheduling and reminders,Backend Eng,2,Activity API
+Lead lifecycle and CRM,Lead views,Web lead list and filters,Web Eng,2,Lead CRUD
+Lead lifecycle and CRM,Lead views,Web lead detail and timeline,Web Eng,2,Activity API
+Lead lifecycle and CRM,Counselor UX,Android lead list and detail,Android Eng,2,Lead API
+Lead lifecycle and CRM,Counselor UX,"Android status update, notes, follow-ups",Android Eng,2,Activity API
+Android call tracking,Call state,Call state detection and CallLog sync module,Android Eng,2,Android login
+Android call tracking,Call state,Call log ingestion API,Backend Eng,2,Lead CRUD
+Android call tracking,Call state,Post-call note popup UX,Android Eng,1,Call state module
+Android recording pipeline,Recording capture,Recording capture with OEM fallback matrix,Android Eng,2,Call state module
+Android recording pipeline,Recording pipeline,Local file management and compression worker,Android Eng,2,Recording capture
+Android recording pipeline,Storage,"Object storage bucket, IAM, signed URL config (S3 encryption + lifecycle)",DevOps,1,None
+Android recording pipeline,Storage access,Recording storage strategy + permission gating (app-private vs SAF),Android Eng,1,Recording capture
+Android recording pipeline,Storage access,SAF folder picker + persisted URI (optional),Android Eng,2,Recording storage strategy
+Android recording pipeline,FGS compliance,Foreground service types + Android 13/14 permission gating,Android Eng,1,Call state module
+Android recording pipeline,Upload,Signed upload endpoints,Backend Eng,2,Storage setup
+Android recording pipeline,Upload,"Upload manager, retry, metadata sync",Android Eng,2,Signed upload endpoints
+Web and reporting,Recording access,"Recording playback with access checks (admin, branch manager)",Web Eng/Backend Eng,2,Recording metadata
+Analytics and dashboards,KPIs,Event schema and aggregation jobs,Backend Eng/Data,2,Lead and call logs
+Analytics and dashboards,KPIs,Admin dashboard widgets,Web Eng/Design,2,Aggregation API
+Analytics and dashboards,KPIs,Branch manager dashboard,Web Eng,1,Aggregation API
+Branch and university mgmt,Org setup,Branch and counselor management API,Backend Eng,2,Core schemas
+Branch and university mgmt,Org setup,Branch and counselor management UI,Web Eng,2,Management API
+Branch and university mgmt,University,University model and counselor mapping UI,Web Eng/Backend Eng,2,Management API
+Compliance and security,Consent,Consent capture flow and policy settings,Product/Backend Eng,2,Role matrix
+Compliance and security,Retention,Recording retention (1 year) and deletion jobs,Backend Eng,2,Storage setup
+Compliance and security,Audit,Audit log for sensitive actions,Backend Eng,1,RBAC policies
+DevOps and QA,Release,CI/CD pipelines and env secrets,DevOps,2,None
+DevOps and QA,Release,QA plan and device matrix for recording,QA,2,Recording capture
+DevOps and QA,Release,Pilot rollout and monitoring dashboards,Product/DevOps,2,Analytics
+Testing and QA automation,Backend tests,Unit/integration tests for contexts and validators,Backend Eng,2,Core schemas
+Testing and QA automation,Property-based tests,"StreamData tests for CSV, dedupe, assignment",Backend Eng,2,"Import pipeline, rule engine"
+Testing and QA automation,LiveView tests,"LiveView tests for import, assignment, lead flows",Web Eng,2,"Lead views, assignment UI"
+Testing and QA automation,Android tests,Unit tests for call state and permission gating,Android Eng,1,Call state module
+Testing and QA automation,Android tests,Instrumentation tests for WorkManager and recording,Android Eng/QA,2,Recording pipeline
+Testing and QA automation,Storage tests,S3 upload integration tests (MinIO or mock),Backend Eng/DevOps,1,Signed upload endpoints

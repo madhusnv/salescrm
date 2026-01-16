@@ -1,0 +1,312 @@
+package com.koncrm.counselor.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.koncrm.counselor.auth.SessionStore
+import com.koncrm.counselor.recordings.RecordingState
+import com.koncrm.counselor.recordings.RecordingStore
+import com.koncrm.counselor.work.CallLogSyncStats
+import com.koncrm.counselor.work.CallLogSyncStore
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun SettingsScreen(
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val sessionStore = remember { SessionStore(context) }
+    val recordingStore = remember { RecordingStore(context) }
+    val syncStore = remember { CallLogSyncStore(context) }
+
+    val recordingState by recordingStore.stateFlow()
+        .collectAsState(initial = RecordingState(false, "idle", null, null))
+    val syncStats by syncStore.statsFlow()
+        .collectAsState(initial = CallLogSyncStats(null, 0, 0, 0))
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        colors.primary.copy(alpha = 0.06f),
+                        colors.background
+                    )
+                )
+            )
+            .padding(20.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                color = colors.onBackground,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Manage your account and preferences",
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.onBackground.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
+            )
+
+            // Profile Card
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(colors.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "KC",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = colors.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(modifier = Modifier.padding(start = 16.dp)) {
+                        Text(
+                            text = "Counselor",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "KonCRM User",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Recording Settings
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "CALL RECORDING",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurface.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Recording Consent",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colors.onSurface
+                            )
+                            Text(
+                                text = if (recordingState.consentGranted)
+                                    "Calls will be recorded"
+                                else
+                                    "Enable to record calls",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = recordingState.consentGranted,
+                            onCheckedChange = { granted ->
+                                scope.launch {
+                                    recordingStore.setConsentGranted(granted)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Sync Status
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "SYNC STATUS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurface.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        SyncStat(label = "Synced", value = "${syncStats.syncedCount}")
+                        SyncStat(label = "Duplicate", value = "${syncStats.duplicateCount}")
+                        SyncStat(label = "Failed", value = "${syncStats.failureCount}")
+                    }
+                    syncStats.lastSyncedAt?.let { lastSync ->
+                        val formatted = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                            .format(Date(lastSync))
+                        Text(
+                            text = "Last sync: $formatted",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(top = 12.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // App Info
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "APP INFO",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurface.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    InfoRow(label = "Version", value = "1.0.0")
+                    InfoRow(label = "Build", value = "1")
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Logout Button
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.errorContainer),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        scope.launch {
+                            sessionStore.clear()
+                            onLogout()
+                        }
+                    }
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Log Out",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.onErrorContainer,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncStat(label: String, value: String) {
+    val colors = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            color = colors.onSurface,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurface.copy(alpha = 0.7f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurface
+        )
+    }
+}

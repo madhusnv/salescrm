@@ -1,0 +1,83 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+
+# Elixir/Phoenix
+_build/
+deps/
+.elixir_ls/
+*.ez
+*.beam
+erl_crash.dump
+*.plt
+*.plts
+
+# Node.js (for Phoenix assets)
+node_modules/
+npm-debug.log
+
+# Phoenix
+/backend/priv/static/assets/
+/backend/.env
+/backend/.env.*
+/backend/config/*.secret.exs
+
+# Uploads and generated files
+/backend/priv/static/uploads/
+
+# Android
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.jks
+*.keystore
+/app/release/
+/app/build/
+*.hprof
+/captures
+.externalNativeBuild
+.cxx
+
+# Kotlin
+*.kotlin_module
+
+# Secrets
+*.secret
+*.pem
+*.key
+secrets/
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+/backend/cover/
+/backend/doc/
+
+# Temporary files
+tmp/
+*.tmp
+*.temp
+
+# Database
+*.db
+*.sqlite3
+
+# Environment
+.env
+.env.local
+.env.*.local
