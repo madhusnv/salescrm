@@ -71,6 +71,7 @@ defmodule BackendWeb.Layouts do
           <.sidebar_link href={~p"/admin/universities"} icon="hero-academic-cap">Universities</.sidebar_link>
           <.sidebar_link href={~p"/admin/recordings"} icon="hero-microphone">Recordings</.sidebar_link>
           <.sidebar_link href={~p"/admin/audit"} icon="hero-document-magnifying-glass">Audit Log</.sidebar_link>
+          <.sidebar_link href={~p"/admin/organization"} icon="hero-cog-6-tooth">Settings</.sidebar_link>
         </nav>
 
         <div class="border-t border-slate-100 p-4">

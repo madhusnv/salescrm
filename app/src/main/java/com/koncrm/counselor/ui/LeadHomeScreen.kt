@@ -691,6 +691,7 @@ private fun LeadDetailCard(
     onLoadMoreCallLogs: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
@@ -711,11 +712,35 @@ private fun LeadDetailCard(
                 color = colors.onSurface,
                 modifier = Modifier.padding(top = 8.dp)
             )
-            Text(
-                text = detail.lead.phoneNumber,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurface.copy(alpha = 0.6f)
-            )
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = detail.lead.phoneNumber,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface.copy(alpha = 0.6f)
+                )
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = colors.primary),
+                    modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = Uri.parse("tel:${detail.lead.phoneNumber}")
+                        }
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text(
+                        text = "📞 Call",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)

@@ -131,6 +131,9 @@ defmodule BackendWeb.Router do
       live("/universities/:id/edit", Admin.UniversityLive.Index, :edit)
       live("/recordings", Admin.RecordingLive.Index, :index)
       live("/audit", Admin.AuditLive.Index, :index)
+      live("/organization", Admin.OrganizationLive.Settings, :index)
     end
+
+    get("/export/leads", Admin.ExportController, :leads)
   end
 end
