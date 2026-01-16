@@ -90,7 +90,7 @@ defmodule BackendWeb.Layouts do
       </aside>
 
       <%!-- Main content --%>
-      <div class={["flex-1", @current_scope && "lg:ml-64"]}>
+      <div class={["flex min-h-screen flex-1 flex-col", @current_scope && "lg:ml-64"]}>
         <header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/90 backdrop-blur">
           <div class="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <a
@@ -140,7 +140,7 @@ defmodule BackendWeb.Layouts do
           </div>
         </header>
 
-        <main class="p-4 sm:p-6 lg:p-8">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8">
           <div class="animate-rise">
             {render_slot(@inner_block)}
           </div>

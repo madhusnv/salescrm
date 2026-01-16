@@ -36,6 +36,7 @@ defmodule BackendWeb.Admin.OrganizationLive.Settings do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
     <div class="mx-auto max-w-2xl space-y-6">
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
@@ -85,6 +86,7 @@ defmodule BackendWeb.Admin.OrganizationLive.Settings do
         <p class="mt-1 text-xs text-slate-400">Use this ID when integrating with APIs</p>
       </div>
     </div>
+    </Layouts.app>
     """
   end
 end

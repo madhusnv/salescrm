@@ -43,6 +43,7 @@ defmodule BackendWeb.Admin.RecordingLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
     <div class="mx-auto max-w-5xl space-y-6">
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
@@ -136,6 +137,7 @@ defmodule BackendWeb.Admin.RecordingLive.Index do
         </div>
       </div>
     </div>
+    </Layouts.app>
     """
   end
 

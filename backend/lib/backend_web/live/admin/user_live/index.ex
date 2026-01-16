@@ -115,6 +115,7 @@ defmodule BackendWeb.Admin.UserLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
     <div class="mx-auto max-w-5xl space-y-6">
       <div class="flex items-center justify-between">
         <div>
@@ -238,6 +239,7 @@ defmodule BackendWeb.Admin.UserLive.Index do
         </div>
       <% end %>
     </div>
+    </Layouts.app>
     """
   end
 end

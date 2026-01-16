@@ -82,6 +82,7 @@ defmodule BackendWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
     <div class="space-y-6">
       <div class="flex items-center justify-between">
         <div>
@@ -235,6 +236,7 @@ defmodule BackendWeb.DashboardLive do
         </.link>
       </div>
     </div>
+    </Layouts.app>
     """
   end
 
