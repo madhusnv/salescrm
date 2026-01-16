@@ -57,6 +57,21 @@ import java.time.format.DateTimeFormatter
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.border
+
 @Composable
 fun LeadHomeScreen(
     accessToken: String,
@@ -163,20 +178,16 @@ fun LeadHomeScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Text(
-                text = "Leads",
+                text = "My Leads",
                 style = MaterialTheme.typography.headlineMedium,
-                color = colors.onBackground
-            )
-            Text(
-                text = "Stay on top of your assignments and follow-ups.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = colors.onBackground.copy(alpha = 0.7f),
-                modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
+                fontWeight = FontWeight.Bold,
+                color = colors.onBackground,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            CallSyncCard(stats = syncStats)
-            RecordingStatusCard(
-                state = recordingState,
+            StatsRow(
+                syncStats = syncStats,
+                recordingState = recordingState,
                 onConsentChange = { granted ->
                     scope.launch {
                         recordingStore.setConsentGranted(granted)
@@ -498,38 +509,67 @@ private fun LeadCard(
 ) {
     val colors = MaterialTheme.colorScheme
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onSelect() }
+            .padding(vertical = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = lead.studentName,
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.onSurface
-            )
-            Text(
-                text = lead.phoneNumber,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurface.copy(alpha = 0.6f)
-            )
-            Row(
-                modifier = Modifier.padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(
+                         if (lead.studentName.isNotEmpty()) {
+                             val hash = lead.studentName.hashCode()
+                             val hue = kotlin.math.abs(hash % 360).toFloat()
+                             androidx.compose.ui.graphics.Color.hsv(hue, 0.4f, 0.9f)
+                         } else colors.primaryContainer
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                StatusPill(label = lead.status)
-                lead.universityName?.let { name ->
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurface.copy(alpha = 0.6f)
+                Text(
+                    text = lead.studentName.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = androidx.compose.ui.graphics.Color.Black.copy(alpha=0.7f),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = lead.studentName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                if (!lead.universityName.isNullOrBlank()) {
+                     Text(
+                        text = lead.universityName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.primary,
+                        fontWeight = FontWeight.Medium
                     )
                 }
+                Text(
+                    text = lead.phoneNumber,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurface.copy(alpha = 0.5f)
+                )
             }
+
+            StatusPill(label = lead.status)
         }
     }
 }
@@ -544,126 +584,73 @@ private fun LeadFilters(
 ) {
     val colors = MaterialTheme.colorScheme
     val statuses = listOf("" to "All", "new" to "New", "follow_up" to "Follow-up", "applied" to "Applied", "not_interested" to "Not interested")
+    
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 12.dp)
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
     ) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text(text = "Search by name or phone") },
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = colors.primary,
-                unfocusedIndicatorColor = colors.secondary.copy(alpha = 0.4f),
-                focusedLabelColor = colors.primary,
-                cursorColor = colors.primary
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            statuses.forEach { (value, label) ->
-                Box(
-                    modifier = Modifier
-                        .background(
-                            if (statusFilter == value) colors.primary.copy(alpha = 0.18f)
-                            else colors.surface.copy(alpha = 0.6f),
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable { onStatusChange(value) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (statusFilter == value) colors.primary else colors.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
-        Text(
-            text = "Apply filters",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.primary,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .clickable { onApply() }
-        )
+         OutlinedTextField(
+             value = searchQuery,
+             onValueChange = onSearchChange,
+             placeholder = { Text("Search by name or phone", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant.copy(alpha=0.7f)) },
+             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = colors.onSurfaceVariant) },
+             modifier = Modifier.fillMaxWidth(),
+             shape = RoundedCornerShape(24.dp),
+             colors = TextFieldDefaults.colors(
+                 unfocusedContainerColor = colors.surfaceVariant.copy(alpha = 0.3f),
+                 focusedContainerColor = colors.surfaceVariant.copy(alpha = 0.3f),
+                 unfocusedIndicatorColor = Color.Transparent,
+                 focusedIndicatorColor = Color.Transparent,
+                 cursorColor = colors.primary
+             ),
+             singleLine = true
+         )
+         
+         Spacer(modifier = Modifier.height(12.dp))
+         
+         Row(
+             modifier = Modifier
+                 .fillMaxWidth()
+                 .horizontalScroll(rememberScrollState()),
+             horizontalArrangement = Arrangement.spacedBy(8.dp)
+         ) {
+             statuses.forEach { (value, label) ->
+                 val isSelected = statusFilter == value
+                 val bgColor = if (isSelected) colors.primary else colors.surface
+                 val contentColor = if (isSelected) colors.onPrimary else colors.onSurface.copy(alpha=0.7f)
+                 val borderColor = if (isSelected) Color.Transparent else colors.outline.copy(alpha=0.3f)
+                 
+                 Box(
+                     modifier = Modifier
+                         .clip(RoundedCornerShape(50))
+                         .background(bgColor)
+                         .border(1.dp, borderColor, RoundedCornerShape(50))
+                         .clickable { onStatusChange(value) }
+                         .padding(horizontal = 16.dp, vertical = 8.dp)
+                 ) {
+                     Text(
+                         text = label, 
+                         style = MaterialTheme.typography.labelMedium, 
+                         color = contentColor,
+                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                     )
+                 }
+             }
+         }
+         
+         Text(
+             text = "Apply filters",
+             style = MaterialTheme.typography.labelLarge,
+             color = colors.primary,
+             fontWeight = FontWeight.SemiBold,
+             modifier = Modifier
+                 .align(Alignment.End)
+                 .padding(top = 12.dp)
+                 .clickable { onApply() }
+         )
     }
 }
 
-@Composable
-private fun RecordingStatusCard(
-    state: RecordingState,
-    onConsentChange: (Boolean) -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
-    val statusLabel = when (state.lastStatus) {
-        "recording" -> "Recording live"
-        "queued" -> "Queued for upload"
-        "uploading" -> "Uploading recording"
-        "uploaded" -> "Recording uploaded"
-        "failed" -> "Upload failed"
-        else -> "Idle"
-    }
-
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Call recordings",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.onSurface
-                    )
-                    Text(
-                        text = if (state.consentGranted) "Consent captured · $statusLabel" else "Consent required to record",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
-                Switch(
-                    checked = state.consentGranted,
-                    onCheckedChange = onConsentChange
-                )
-            }
-            state.lastFileName?.let { name ->
-                Text(
-                    text = "Last file: $name",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-            state.lastError?.let { error ->
-                Text(
-                    text = "Error: $error",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.error,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
-        }
-    }
-}
+// RecordingStatusCard removed/replaced by StatsRow
 
 @Composable
 private fun LeadDetailCard(
@@ -1102,43 +1089,63 @@ private fun RecordingList(recordings: List<RecordingEntry>) {
 }
 
 @Composable
-private fun CallSyncCard(stats: CallLogSyncStats) {
-    val colors = MaterialTheme.colorScheme
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+private fun StatsRow(
+    syncStats: CallLogSyncStats,
+    recordingState: RecordingState,
+    onConsentChange: (Boolean) -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            .padding(bottom = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Call sync",
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.onSurface
-            )
-            Text(
-                text = "Last sync: ${formatEpoch(stats.lastSyncedAt)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            Row(
-                modifier = Modifier.padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(text = "New ${stats.syncedCount}", style = MaterialTheme.typography.bodyMedium)
-                Text(text = "Dupes ${stats.duplicateCount}", style = MaterialTheme.typography.bodyMedium)
-                if (stats.failureCount > 0) {
-                    Text(
-                        text = "Failed ${stats.failureCount}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.error
-                    )
-                }
-            }
-        }
+         // Sync Card
+         Card(
+             modifier = Modifier.weight(1f),
+             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.4f)),
+             shape = RoundedCornerShape(20.dp),
+             elevation = CardDefaults.cardElevation(0.dp)
+         ) {
+             Column(modifier = Modifier.padding(16.dp)) {
+                 Text("Call Sync", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                 Spacer(modifier = Modifier.height(8.dp))
+                 Row(verticalAlignment = Alignment.Bottom) {
+                     Text("${syncStats.syncedCount}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                     Text(" new", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom=4.dp))
+                 }
+             }
+         }
+         
+         // Recording Card
+         Card(
+             modifier = Modifier.weight(1f),
+             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.4f)),
+             shape = RoundedCornerShape(20.dp),
+             elevation = CardDefaults.cardElevation(0.dp)
+         ) {
+             Column(modifier = Modifier.padding(12.dp)) {
+                 Row(
+                     verticalAlignment = Alignment.CenterVertically, 
+                     horizontalArrangement = Arrangement.SpaceBetween, 
+                     modifier = Modifier.fillMaxWidth()
+                 ) {
+                     Text("Rec", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                     Switch(
+                         checked = recordingState.consentGranted, 
+                         onCheckedChange = onConsentChange, 
+                         modifier = Modifier.scale(0.7f).height(30.dp)
+                     )
+                 }
+                 Spacer(modifier = Modifier.height(4.dp))
+                 Text(
+                    if(recordingState.lastStatus == "recording") "Live 🔴" else "Active", 
+                    style = MaterialTheme.typography.titleMedium, 
+                    fontWeight = FontWeight.Bold,
+                    color = if(recordingState.lastStatus == "recording") Color.Red else MaterialTheme.colorScheme.onSurface
+                 )
+             }
+         }
     }
 }
 
@@ -1301,16 +1308,24 @@ private fun CallNoteOverlay(
 @Composable
 private fun StatusPill(label: String) {
     val colors = MaterialTheme.colorScheme
+    val (bgColor, textColor) = when (label.lowercase()) {
+        "new" -> colors.primaryContainer to colors.onPrimaryContainer
+        "follow_up" -> Color(0xFFFFF4DE) to Color(0xFFD97706) // Amber
+        "applied" -> Color(0xFFDCFCE7) to Color(0xFF15803D) // Green
+        "not_interested" -> Color(0xFFFEE2E2) to Color(0xFFB91C1C) // Red
+        else -> colors.surfaceVariant to colors.onSurfaceVariant
+    }
+    
     Box(
         modifier = Modifier
-            .background(colors.primary.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .background(bgColor, RoundedCornerShape(50)) // Pill shape
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = label.replace("_", " "),
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.primary,
-            fontWeight = FontWeight.SemiBold
+            text = label.replace("_", " ").capitalize(java.util.Locale.ROOT),
+            style = MaterialTheme.typography.labelSmall, // Smaller, tighter
+            color = textColor,
+            fontWeight = FontWeight.Bold
         )
     }
 }
