@@ -3,8 +3,14 @@ defmodule Backend.Imports.CsvParser do
 
   @required_headers ["student_name", "phone_number"]
 
+  # Map alternative header names to the canonical names
+  @header_aliases %{
+    "student_name" => ["student_name", "studentname", "student name", "name", "student"],
+    "phone_number" => ["phone_number", "phonenumber", "phone number", "phone", "mobile", "mobile_number", "contact"]
+  }
+
   def parse_leads_csv(csv_binary) when is_binary(csv_binary) do
-    rows = CSV.parse_string(csv_binary)
+    rows = CSV.parse_string(csv_binary, skip_headers: false)
 
     case rows do
       [] ->
@@ -12,12 +18,13 @@ defmodule Backend.Imports.CsvParser do
 
       [header | data_rows] ->
         with {:ok, header_map} <- normalize_headers(header),
-             :ok <- validate_headers(header_map) do
+             {:ok, canonical_map} <- map_to_canonical(header_map),
+             :ok <- validate_headers(canonical_map) do
           parsed_rows =
             data_rows
             |> Enum.with_index(2)
             |> Enum.map(fn {row, row_number} ->
-              {row_number, map_row(row, header_map)}
+              {row_number, map_row(row, canonical_map)}
             end)
 
           {:ok, parsed_rows}
@@ -35,6 +42,20 @@ defmodule Backend.Imports.CsvParser do
     else
       {:error, :duplicate_headers}
     end
+  end
+
+  defp map_to_canonical(header_map) do
+    canonical =
+      Enum.reduce(@header_aliases, %{}, fn {canonical_name, aliases}, acc ->
+        found_alias = Enum.find(aliases, fn alias -> Map.has_key?(header_map, alias) end)
+        if found_alias do
+          Map.put(acc, canonical_name, Map.get(header_map, found_alias))
+        else
+          acc
+        end
+      end)
+
+    {:ok, canonical}
   end
 
   defp validate_headers(header_map) do
@@ -67,3 +88,4 @@ defmodule Backend.Imports.CsvParser do
     |> String.downcase()
   end
 end
+

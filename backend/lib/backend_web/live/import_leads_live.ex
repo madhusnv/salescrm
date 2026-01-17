@@ -82,6 +82,7 @@ defmodule BackendWeb.ImportLeadsLive do
               for={%{}}
               id="lead-import-form"
               phx-submit="import"
+              phx-change="validate"
               class="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.35)]"
             >
               <div class="space-y-5">
@@ -262,6 +263,11 @@ defmodule BackendWeb.ImportLeadsLive do
   end
 
   @impl true
+  def handle_event("validate", params, socket) do
+    university_id = Map.get(params, "university_id")
+    {:noreply, assign(socket, :selected_university_id, university_id)}
+  end
+
   def handle_event("import", %{"university_id" => university_id}, socket) do
     user = socket.assigns.current_scope.user
 
@@ -279,6 +285,25 @@ defmodule BackendWeb.ImportLeadsLive do
            Imports.enqueue_leads_import(attrs, csv_content)
          end) do
       [{:ok, %Backend.Imports.ImportJob{id: job_id}}] ->
+        {:noreply,
+         socket
+         |> assign(:import_job_id, job_id)
+         |> assign(
+           :total_count,
+           Imports.count_import_jobs(user.organization_id, socket.assigns.filters)
+         )
+         |> assign(
+           :jobs,
+           Imports.list_import_jobs(
+             user.organization_id,
+             socket.assigns.filters,
+             socket.assigns.page,
+             socket.assigns.page_size
+           )
+         )}
+
+      # Handle case where job is returned directly (not wrapped in {:ok, _})
+      [%Backend.Imports.ImportJob{id: job_id}] ->
         {:noreply,
          socket
          |> assign(:import_job_id, job_id)

@@ -82,6 +82,7 @@ defmodule BackendWeb.Admin.UserLive.Index do
     attrs =
       user_params
       |> Map.put("organization_id", scope.user.organization_id)
+      |> cast_id_fields(["branch_id", "role_id"])
 
     case Accounts.register_user(attrs) do
       {:ok, _user} ->
@@ -106,6 +107,17 @@ defmodule BackendWeb.Admin.UserLive.Index do
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
+  end
+
+  defp cast_id_fields(params, fields) do
+    Enum.reduce(fields, params, fn field, acc ->
+      case Map.get(acc, field) do
+        nil -> acc
+        "" -> Map.put(acc, field, nil)
+        val when is_binary(val) -> Map.put(acc, field, String.to_integer(val))
+        val -> Map.put(acc, field, val)
+      end
+    end)
   end
 
   defp list_users(scope) do

@@ -146,8 +146,8 @@ defmodule Backend.Imports do
           status: status,
           errors: errors,
           raw_data: row_map,
-          inserted_at: DateTime.utc_now(:second),
-          updated_at: DateTime.utc_now(:second)
+          inserted_at: NaiveDateTime.utc_now(:second),
+          updated_at: NaiveDateTime.utc_now(:second)
         }
       end)
 
@@ -403,8 +403,8 @@ defmodule Backend.Imports do
           import_row_id: row.id,
           match_type: "soft",
           status: "pending",
-          inserted_at: DateTime.utc_now(:second),
-          updated_at: DateTime.utc_now(:second)
+          inserted_at: NaiveDateTime.utc_now(:second),
+          updated_at: NaiveDateTime.utc_now(:second)
         }
       end)
 

@@ -46,40 +46,37 @@ defmodule Backend.Assignments do
   end
 
   def pick_counselor(organization_id, branch_id, university_id) do
-    Repo.transaction(fn ->
-      query =
-        AssignmentRule
-        |> where(
-          [r],
-          r.organization_id == ^organization_id and
-            r.university_id == ^university_id and
-            r.is_active == true
-        )
-        |> maybe_filter_branch(branch_id)
-        |> order_by([r], desc: r.priority, asc: r.last_assigned_at, asc: r.assigned_count)
-        |> lock("FOR UPDATE SKIP LOCKED")
+    query =
+      AssignmentRule
+      |> where(
+        [r],
+        r.organization_id == ^organization_id and
+          r.university_id == ^university_id and
+          r.is_active == true
+      )
+      |> maybe_filter_branch(branch_id)
+      |> order_by([r], desc: r.priority, asc: r.last_assigned_at, asc: r.assigned_count)
 
-      rules = Repo.all(from(r in query, limit: 50))
+    rules = Repo.all(from(r in query, limit: 50))
 
-      case {rules, pick_available_rule(rules)} do
-        {[], _} ->
-          Repo.rollback(:no_assignment_rules)
+    case {rules, pick_available_rule(rules)} do
+      {[], _} ->
+        {:error, :no_assignment_rules}
 
-        {_, {:ok, rule, next_count}} ->
-          updated_rule =
-            rule
-            |> AssignmentRule.system_changeset(%{
-              assigned_count: next_count,
-              last_assigned_at: DateTime.utc_now(:second)
-            })
-            |> Repo.update!()
+      {_, {:ok, rule, next_count}} ->
+        updated_rule =
+          rule
+          |> AssignmentRule.system_changeset(%{
+            assigned_count: next_count,
+            last_assigned_at: DateTime.utc_now(:second)
+          })
+          |> Repo.update!()
 
-          updated_rule.counselor_id
+        {:ok, updated_rule.counselor_id}
 
-        {_, :none} ->
-          Repo.rollback(:no_available_counselors)
-      end
-    end)
+      {_, :none} ->
+        {:error, :no_available_counselors}
+    end
   end
 
   defp apply_filters(query, %{"university_id" => university_id}) when university_id != "" do
