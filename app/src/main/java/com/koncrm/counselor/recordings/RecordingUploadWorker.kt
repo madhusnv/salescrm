@@ -16,6 +16,9 @@ class RecordingUploadWorker(
     override suspend fun doWork(): Result {
         val sessionStore = SessionStore(applicationContext)
         val session = sessionStore.sessionFlow.firstOrNull() ?: return Result.retry()
+        
+        // Initialize AuthenticatedHttpClient for this worker context
+        com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
 
         val filePath = inputData.getString(KEY_FILE_PATH) ?: return Result.failure()
         val durationSeconds = inputData.getLong(KEY_DURATION_SECONDS, 0)
@@ -30,7 +33,7 @@ class RecordingUploadWorker(
 
         if (leadId == null && !phoneNumber.isNullOrBlank()) {
             val leadApi = LeadApi()
-            val lookup = leadApi.findLeadIdByPhone(session.accessToken, phoneNumber)
+            val lookup = leadApi.findLeadIdByPhone(phoneNumber)
             leadId = lookup.getOrNull()
         }
 
@@ -39,7 +42,6 @@ class RecordingUploadWorker(
 
         val manager = RecordingUploadManager()
         val result = manager.enqueueUpload(
-            accessToken = session.accessToken,
             file = file,
             leadId = leadId,
             callLogId = callLogId,

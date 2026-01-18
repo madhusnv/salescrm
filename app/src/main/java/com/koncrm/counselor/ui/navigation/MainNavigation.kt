@@ -3,8 +3,10 @@ package com.koncrm.counselor.ui.navigation
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.koncrm.counselor.auth.SessionTokens
+import com.koncrm.counselor.ui.DashboardScreen
 import com.koncrm.counselor.ui.LeadHomeScreen
 import com.koncrm.counselor.ui.SettingsScreen
 
@@ -32,6 +35,12 @@ sealed class BottomNavItem(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
+    data object Dashboard : BottomNavItem(
+        route = "dashboard",
+        title = "Home",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
     data object Leads : BottomNavItem(
         route = "leads",
         title = "Leads",
@@ -52,8 +61,8 @@ fun MainNavigation(
     onLogout: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    var selectedItem by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Leads) }
-    val items = listOf(BottomNavItem.Leads, BottomNavItem.Settings)
+    var selectedItem by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
+    val items = listOf(BottomNavItem.Dashboard, BottomNavItem.Leads, BottomNavItem.Settings)
 
     Scaffold(
         bottomBar = {
@@ -91,9 +100,15 @@ fun MainNavigation(
         }
     ) { paddingValues ->
         when (selectedItem) {
+            BottomNavItem.Dashboard -> {
+                DashboardScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
             BottomNavItem.Leads -> {
                 LeadHomeScreen(
-                    accessToken = session.accessToken,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)

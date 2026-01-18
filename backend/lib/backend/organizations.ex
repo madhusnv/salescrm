@@ -11,7 +11,9 @@ defmodule Backend.Organizations do
   def get_branch!(id), do: Repo.get!(Branch, id)
 
   def list_branches(organization_id) do
-    Repo.all(from(b in Branch, where: b.organization_id == ^organization_id, order_by: [asc: b.name]))
+    Repo.all(
+      from(b in Branch, where: b.organization_id == ^organization_id, order_by: [asc: b.name])
+    )
   end
 
   def create_branch(attrs) do
@@ -76,4 +78,3 @@ defmodule Backend.Organizations do
     |> Repo.update()
   end
 end
-

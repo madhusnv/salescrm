@@ -128,129 +128,129 @@ defmodule BackendWeb.Admin.UserLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-    <div class="mx-auto max-w-5xl space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-          <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
+      <div class="mx-auto max-w-5xl space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
+            <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
+          </div>
+          <.link
+            :if={@live_action == :index}
+            navigate={~p"/admin/users/new"}
+            class="inline-flex h-10 items-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            <.icon name="hero-plus" class="size-4" /> Add User
+          </.link>
         </div>
-        <.link
-          :if={@live_action == :index}
-          navigate={~p"/admin/users/new"}
-          class="inline-flex h-10 items-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          <.icon name="hero-plus" class="size-4" /> Add User
-        </.link>
+
+        <%= if @live_action in [:new, :edit] do %>
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <.form for={@form} phx-submit="save" class="space-y-4">
+              <.input field={@form[:email]} type="email" label="Email" required />
+              <.input field={@form[:full_name]} type="text" label="Full Name" required />
+              <.input field={@form[:phone_number]} type="text" label="Phone Number" />
+              <.input
+                :if={@live_action == :new}
+                field={@form[:password]}
+                type="password"
+                label="Password"
+                required
+              />
+              <.input
+                field={@form[:role_id]}
+                type="select"
+                label="Role"
+                options={Enum.map(@roles, &{&1.name, &1.id})}
+                prompt="Select role"
+              />
+              <.input
+                field={@form[:branch_id]}
+                type="select"
+                label="Branch"
+                options={Enum.map(@branches, &{&1.name, &1.id})}
+                prompt="Select branch"
+              />
+
+              <div class="flex items-center gap-3 pt-4">
+                <button
+                  type="submit"
+                  class="inline-flex h-10 items-center rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  {if @live_action == :new, do: "Create User", else: "Save Changes"}
+                </button>
+                <.link
+                  navigate={~p"/admin/users"}
+                  class="inline-flex h-10 items-center rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:border-slate-300"
+                >
+                  Cancel
+                </.link>
+              </div>
+            </.form>
+          </div>
+        <% else %>
+          <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-slate-100">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Name
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Email
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Role
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Status
+                  </th>
+                  <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr :for={user <- @users} class="hover:bg-slate-50">
+                  <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900">
+                    {user.full_name || "—"}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                    {user.email}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                    {user.role && user.role.name}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4">
+                    <span class={[
+                      "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                      user.is_active && "bg-emerald-100 text-emerald-700",
+                      !user.is_active && "bg-red-100 text-red-700"
+                    ]}>
+                      {if user.is_active, do: "Active", else: "Inactive"}
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
+                    <.link
+                      navigate={~p"/admin/users/#{user.id}/edit"}
+                      class="font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      Edit
+                    </.link>
+                    <button
+                      phx-click="delete"
+                      phx-value-id={user.id}
+                      class="ml-4 font-medium text-red-600 hover:text-red-800"
+                      data-confirm="Are you sure?"
+                    >
+                      {if user.is_active, do: "Deactivate", else: "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
       </div>
-
-      <%= if @live_action in [:new, :edit] do %>
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <.form for={@form} phx-submit="save" class="space-y-4">
-            <.input field={@form[:email]} type="email" label="Email" required />
-            <.input field={@form[:full_name]} type="text" label="Full Name" required />
-            <.input field={@form[:phone_number]} type="text" label="Phone Number" />
-            <.input
-              :if={@live_action == :new}
-              field={@form[:password]}
-              type="password"
-              label="Password"
-              required
-            />
-            <.input
-              field={@form[:role_id]}
-              type="select"
-              label="Role"
-              options={Enum.map(@roles, &{&1.name, &1.id})}
-              prompt="Select role"
-            />
-            <.input
-              field={@form[:branch_id]}
-              type="select"
-              label="Branch"
-              options={Enum.map(@branches, &{&1.name, &1.id})}
-              prompt="Select branch"
-            />
-
-            <div class="flex items-center gap-3 pt-4">
-              <button
-                type="submit"
-                class="inline-flex h-10 items-center rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                {if @live_action == :new, do: "Create User", else: "Save Changes"}
-              </button>
-              <.link
-                navigate={~p"/admin/users"}
-                class="inline-flex h-10 items-center rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:border-slate-300"
-              >
-                Cancel
-              </.link>
-            </div>
-          </.form>
-        </div>
-      <% else %>
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table class="min-w-full divide-y divide-slate-100">
-            <thead class="bg-slate-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Name
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Email
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Role
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr :for={user <- @users} class="hover:bg-slate-50">
-                <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900">
-                  {user.full_name || "—"}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                  {user.email}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                  {user.role && user.role.name}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4">
-                  <span class={[
-                    "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
-                    user.is_active && "bg-emerald-100 text-emerald-700",
-                    !user.is_active && "bg-red-100 text-red-700"
-                  ]}>
-                    {if user.is_active, do: "Active", else: "Inactive"}
-                  </span>
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
-                  <.link
-                    navigate={~p"/admin/users/#{user.id}/edit"}
-                    class="font-medium text-slate-600 hover:text-slate-900"
-                  >
-                    Edit
-                  </.link>
-                  <button
-                    phx-click="delete"
-                    phx-value-id={user.id}
-                    class="ml-4 font-medium text-red-600 hover:text-red-800"
-                    data-confirm="Are you sure?"
-                  >
-                    {if user.is_active, do: "Deactivate", else: "Activate"}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      <% end %>
-    </div>
     </Layouts.app>
     """
   end

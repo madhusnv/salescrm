@@ -10,11 +10,16 @@ config :backend, BackendWeb.Endpoint, cache_static_manifest: "priv/static/cache_
 # Force using SSL in production. This also sets the "strict-security-transport" header,
 # known as HSTS. If you have a health check endpoint, you may want to exclude it below.
 # Note `:force_ssl` is required to be set at compile-time.
+# Force SSL in production
+config :backend, BackendWeb.Endpoint, force_ssl: [hsts: true, rewrite_on: [:x_forwarded_proto]]
+
+# Configure secure session cookies
 config :backend, BackendWeb.Endpoint,
-  force_ssl: [rewrite_on: [:x_forwarded_proto]],
-  exclude: [
-    # paths: ["/health"],
-    hosts: ["localhost", "127.0.0.1"]
+  session_options: [
+    key: "_backend_key",
+    signing_salt: "your_signing_salt",
+    same_site: "Lax",
+    secure: true
   ]
 
 # Configure Swoosh API Client

@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import android.content.Intent
 import kotlinx.coroutines.launch
+import com.koncrm.counselor.network.AuthenticatedHttpClient
+import com.koncrm.counselor.work.CallLogSyncScheduler
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +39,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             KonCRMCounselorTheme {
                 val sessionStore = remember { SessionStore(applicationContext) }
+                
+                // Initialize AuthenticatedHttpClient with SessionStore for automatic token refresh
+                LaunchedEffect(Unit) {
+                    AuthenticatedHttpClient.init(sessionStore)
+                }
+                
                 val authRepository = remember { AuthRepository(sessionStore) }
                 val session by sessionStore.sessionFlow.collectAsState(initial = null)
                 val scope = rememberCoroutineScope()
@@ -48,6 +56,10 @@ class MainActivity : ComponentActivity() {
                             CallMonitoringServiceController(enabled = false)
                             LoginScreen(authRepository = authRepository, onLoginSuccess = {})
                         } else {
+                            // Schedule call log sync when user is logged in
+                            LaunchedEffect(currentSession) {
+                                CallLogSyncScheduler.schedule(applicationContext)
+                            }
                             PermissionGate {
                                 CallMonitoringServiceController(enabled = true)
                                 MainNavigation(

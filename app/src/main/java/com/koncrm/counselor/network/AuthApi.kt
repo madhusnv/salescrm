@@ -28,20 +28,53 @@ class AuthApi(
             runCatching {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("Login failed with ${'$'}{response.code}")
+                        throw IllegalStateException("Login failed with ${response.code}")
                     }
 
                     val body = response.body?.string().orEmpty()
                     val json = JSONObject(body)
                     val access = json.getString("access_token")
                     val refresh = json.getString("refresh_token")
+                    val userId = json.optLong("user_id", 0L)
 
-                    SessionTokens(access, refresh)
+                    SessionTokens(access, refresh, userId)
                 }
             }
         }
 
-    private companion object {
+    /**
+     * Refreshes the access token using the refresh token.
+     * Returns new SessionTokens on success, or null if refresh failed.
+     */
+    fun refreshTokenSync(refreshToken: String): SessionTokens? {
+        val payload = JSONObject()
+            .put("refresh_token", refreshToken)
+            .toString()
+
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/refresh")
+            .post(payload.toRequestBody(JSON))
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    null
+                } else {
+                    val body = response.body?.string().orEmpty()
+                    val json = JSONObject(body)
+                    val access = json.getString("access_token")
+                    val refresh = json.getString("refresh_token")
+                    val userId = json.optLong("user_id", 0L)
+                    SessionTokens(access, refresh, userId)
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

@@ -36,10 +36,9 @@ class LeadRepository(context: Context) {
      * Fetches leads from the API and caches them locally.
      * Returns the number of leads synced.
      */
-    suspend fun syncLeads(accessToken: String): Result<Int> {
+    suspend fun syncLeads(): Result<Int> {
         return try {
             val result = api.listLeads(
-                accessToken = accessToken,
                 page = 1,
                 pageSize = 500,
                 status = null,
@@ -64,14 +63,14 @@ class LeadRepository(context: Context) {
     /**
      * Gets a lead from cache, or fetches from API if not cached.
      */
-    suspend fun getLead(id: Long, accessToken: String): LeadEntity? {
+    suspend fun getLead(id: Long): LeadEntity? {
         // Try cache first
         val cached = leadDao.getLeadById(id)
         if (cached != null) return cached
 
         // Fetch from API and cache
         return try {
-            val result = api.getLead(accessToken, id)
+            val result = api.getLead(id)
             result.getOrNull()?.let { detail ->
                 val entity = detail.toEntity()
                 leadDao.insertLead(entity)
@@ -109,16 +108,16 @@ class LeadRepository(context: Context) {
     /**
      * Processes all pending actions. Returns the number successfully processed.
      */
-    suspend fun processPendingActions(accessToken: String): Int {
+    suspend fun processPendingActions(): Int {
         val pending = pendingDao.getAllPending()
         var processed = 0
 
         for (action in pending) {
             val success = try {
                 when (action.actionType) {
-                    "note" -> processNoteAction(action, accessToken)
-                    "status" -> processStatusAction(action, accessToken)
-                    "followup" -> processFollowupAction(action, accessToken)
+                    "note" -> processNoteAction(action)
+                    "status" -> processStatusAction(action)
+                    "followup" -> processFollowupAction(action)
                     else -> true // Unknown action type, just delete it
                 }
             } catch (e: Exception) {
@@ -139,25 +138,25 @@ class LeadRepository(context: Context) {
         return processed
     }
 
-    private suspend fun processNoteAction(action: PendingActionEntity, token: String): Boolean {
+    private suspend fun processNoteAction(action: PendingActionEntity): Boolean {
         val json = JSONObject(action.payload)
         val text = json.optString("text", "")
-        val result = api.addNote(token, action.leadId, text)
+        val result = api.addNote(action.leadId, text)
         return result.isSuccess
     }
 
-    private suspend fun processStatusAction(action: PendingActionEntity, token: String): Boolean {
+    private suspend fun processStatusAction(action: PendingActionEntity): Boolean {
         val json = JSONObject(action.payload)
         val status = json.optString("status", "")
-        val result = api.updateStatus(token, action.leadId, status)
+        val result = api.updateStatus(action.leadId, status)
         return result.isSuccess
     }
 
-    private suspend fun processFollowupAction(action: PendingActionEntity, token: String): Boolean {
+    private suspend fun processFollowupAction(action: PendingActionEntity): Boolean {
         val json = JSONObject(action.payload)
         val dueAt = json.optString("dueAt", "")
         val note = json.optString("note", "")
-        val result = api.scheduleFollowup(token, action.leadId, dueAt, note)
+        val result = api.scheduleFollowup(action.leadId, dueAt, note)
         return result.isSuccess
     }
 

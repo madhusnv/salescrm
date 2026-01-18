@@ -105,96 +105,96 @@ defmodule BackendWeb.Admin.BranchLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-    <div class="mx-auto max-w-5xl space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-          <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
+      <div class="mx-auto max-w-5xl space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
+            <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
+          </div>
+          <.link
+            :if={@live_action == :index}
+            navigate={~p"/admin/branches/new"}
+            class="inline-flex h-10 items-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            <.icon name="hero-plus" class="size-4" /> Add Branch
+          </.link>
         </div>
-        <.link
-          :if={@live_action == :index}
-          navigate={~p"/admin/branches/new"}
-          class="inline-flex h-10 items-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          <.icon name="hero-plus" class="size-4" /> Add Branch
-        </.link>
+
+        <%= if @live_action in [:new, :edit] do %>
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <.form for={@form} phx-submit="save" class="space-y-4">
+              <.input field={@form[:name]} type="text" label="Branch Name" required />
+              <.input field={@form[:city]} type="text" label="City" />
+              <.input field={@form[:state]} type="text" label="State" />
+
+              <div class="flex items-center gap-3 pt-4">
+                <button
+                  type="submit"
+                  class="inline-flex h-10 items-center rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  {if @live_action == :new, do: "Create Branch", else: "Save Changes"}
+                </button>
+                <.link
+                  navigate={~p"/admin/branches"}
+                  class="inline-flex h-10 items-center rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:border-slate-300"
+                >
+                  Cancel
+                </.link>
+              </div>
+            </.form>
+          </div>
+        <% else %>
+          <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-slate-100">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Name
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    City
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    State
+                  </th>
+                  <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr :for={branch <- @branches} class="hover:bg-slate-50">
+                  <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900">
+                    {branch.name}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                    {branch.city || "—"}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                    {branch.state || "—"}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
+                    <.link
+                      navigate={~p"/admin/branches/#{branch.id}/edit"}
+                      class="font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      Edit
+                    </.link>
+                    <button
+                      phx-click="delete"
+                      phx-value-id={branch.id}
+                      class="ml-4 font-medium text-red-600 hover:text-red-800"
+                      data-confirm="Are you sure? This will fail if the branch has users or leads."
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
       </div>
-
-      <%= if @live_action in [:new, :edit] do %>
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <.form for={@form} phx-submit="save" class="space-y-4">
-            <.input field={@form[:name]} type="text" label="Branch Name" required />
-            <.input field={@form[:city]} type="text" label="City" />
-            <.input field={@form[:state]} type="text" label="State" />
-
-            <div class="flex items-center gap-3 pt-4">
-              <button
-                type="submit"
-                class="inline-flex h-10 items-center rounded-full bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                {if @live_action == :new, do: "Create Branch", else: "Save Changes"}
-              </button>
-              <.link
-                navigate={~p"/admin/branches"}
-                class="inline-flex h-10 items-center rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:border-slate-300"
-              >
-                Cancel
-              </.link>
-            </div>
-          </.form>
-        </div>
-      <% else %>
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table class="min-w-full divide-y divide-slate-100">
-            <thead class="bg-slate-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Name
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  City
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  State
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr :for={branch <- @branches} class="hover:bg-slate-50">
-                <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900">
-                  {branch.name}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                  {branch.city || "—"}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                  {branch.state || "—"}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
-                  <.link
-                    navigate={~p"/admin/branches/#{branch.id}/edit"}
-                    class="font-medium text-slate-600 hover:text-slate-900"
-                  >
-                    Edit
-                  </.link>
-                  <button
-                    phx-click="delete"
-                    phx-value-id={branch.id}
-                    class="ml-4 font-medium text-red-600 hover:text-red-800"
-                    data-confirm="Are you sure? This will fail if the branch has users or leads."
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      <% end %>
-    </div>
     </Layouts.app>
     """
   end

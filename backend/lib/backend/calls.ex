@@ -6,6 +6,7 @@ defmodule Backend.Calls do
   alias Backend.Calls.CallLog
   alias Backend.Leads
   alias Backend.Repo
+  alias BackendWeb.Broadcaster
 
   def list_call_logs_for_lead(%Scope{} = scope, lead_id, limit \\ 20, offset \\ 0) do
     _lead = Leads.get_lead!(scope, lead_id)
@@ -69,6 +70,8 @@ defmodule Backend.Calls do
               if call_log.consent_granted do
                 _ = Analytics.log_event(scope, "consent_captured", %{lead_id: call_log.lead_id})
               end
+
+              _ = Broadcaster.broadcast_call_synced(scope.user.id, call_log)
 
               {:ok, call_log, :created}
 

@@ -1,5 +1,6 @@
 defmodule BackendWeb.Plugs.ApiAuth do
   import Plug.Conn
+  require Logger
 
   alias Backend.Accounts
   alias Backend.Accounts.Scope
@@ -18,7 +19,9 @@ defmodule BackendWeb.Plugs.ApiAuth do
       |> assign(:current_user, user)
       |> assign(:current_scope, Scope.for_user(user))
     else
-      _ -> conn
+      error ->
+        Logger.warning("ApiAuth failed: #{inspect(error)}, auth_header=#{inspect(get_req_header(conn, "authorization"))}")
+        conn
     end
   end
 

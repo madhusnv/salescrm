@@ -95,7 +95,8 @@ defmodule Backend.Assignments do
         value -> value
       end
 
-    where(query, [r], r.branch_id == ^branch_id)
+    # Find rules where branch_id is NULL (applies to all branches) OR matches the specific branch
+    where(query, [r], is_nil(r.branch_id) or r.branch_id == ^branch_id)
   end
 
   defp pick_available_rule(rules) do

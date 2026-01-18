@@ -1,45 +1,69 @@
 package com.koncrm.counselor.auth
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
-private val Context.dataStore by preferencesDataStore(name = "session_store")
+class SessionStore(context: Context) {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
 
-class SessionStore(private val context: Context) {
-    private val accessTokenKey = stringPreferencesKey("access_token")
-    private val refreshTokenKey = stringPreferencesKey("refresh_token")
+    private val securePrefs: SharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        "secure_session_store",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
-    val sessionFlow: Flow<SessionTokens?> =
-        context.dataStore.data.map { prefs ->
-            val access = prefs[accessTokenKey]
-            val refresh = prefs[refreshTokenKey]
-            if (access.isNullOrBlank() || refresh.isNullOrBlank()) {
-                null
-            } else {
-                SessionTokens(access, refresh)
-            }
-        }
+    private val _sessionFlow = MutableStateFlow<SessionTokens?>(loadTokens())
+    val sessionFlow: Flow<SessionTokens?> = _sessionFlow.asStateFlow()
 
-    suspend fun save(tokens: SessionTokens) {
-        context.dataStore.edit { prefs ->
-            prefs[accessTokenKey] = tokens.accessToken
-            prefs[refreshTokenKey] = tokens.refreshToken
+    private fun loadTokens(): SessionTokens? {
+        val access = securePrefs.getString(ACCESS_TOKEN_KEY, null)
+        val refresh = securePrefs.getString(REFRESH_TOKEN_KEY, null)
+        val userId = securePrefs.getLong(USER_ID_KEY, 0L)
+        return if (!access.isNullOrBlank() && !refresh.isNullOrBlank()) {
+            SessionTokens(access, refresh, userId)
+        } else {
+            null
         }
     }
 
-    suspend fun clear() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(accessTokenKey)
-            prefs.remove(refreshTokenKey)
-        }
+    suspend fun save(tokens: SessionTokens) = withContext(Dispatchers.IO) {
+        securePrefs.edit()
+            .putString(ACCESS_TOKEN_KEY, tokens.accessToken)
+            .putString(REFRESH_TOKEN_KEY, tokens.refreshToken)
+            .putLong(USER_ID_KEY, tokens.userId)
+            .apply()
+        _sessionFlow.value = tokens
+    }
+
+    suspend fun clear() = withContext(Dispatchers.IO) {
+        securePrefs.edit()
+            .remove(ACCESS_TOKEN_KEY)
+            .remove(REFRESH_TOKEN_KEY)
+            .remove(USER_ID_KEY)
+            .apply()
+        _sessionFlow.value = null
+    }
+
+    companion object {
+        private const val ACCESS_TOKEN_KEY = "access_token"
+        private const val REFRESH_TOKEN_KEY = "refresh_token"
+        private const val USER_ID_KEY = "user_id"
     }
 }
 
 data class SessionTokens(
     val accessToken: String,
-    val refreshToken: String
+    val refreshToken: String,
+    val userId: Long = 0L
 )

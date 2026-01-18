@@ -69,7 +69,8 @@ defmodule Backend.MixProject do
       {:jason, "~> 1.2"},
       {:stream_data, "~> 1.1", only: :test},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:hammer, "~> 6.1"}
     ]
   end
 

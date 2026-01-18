@@ -247,7 +247,10 @@ defmodule BackendWeb.CoreComponents do
     ~H"""
     <div class="mb-2">
       <label class="block text-sm text-slate-700">
-        <span :if={@label} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span
+          :if={@label}
+          class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        >
           {@label}
         </span>
         <select
@@ -256,7 +259,8 @@ defmodule BackendWeb.CoreComponents do
           class={[
             @class ||
               "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200",
-            @errors != [] && (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
+            @errors != [] &&
+              (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
           ]}
           multiple={@multiple}
           {@rest}
@@ -274,7 +278,10 @@ defmodule BackendWeb.CoreComponents do
     ~H"""
     <div class="mb-2">
       <label class="block text-sm text-slate-700">
-        <span :if={@label} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span
+          :if={@label}
+          class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        >
           {@label}
         </span>
         <textarea
@@ -283,7 +290,8 @@ defmodule BackendWeb.CoreComponents do
           class={[
             @class ||
               "min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200",
-            @errors != [] && (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
+            @errors != [] &&
+              (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
           ]}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
@@ -298,7 +306,10 @@ defmodule BackendWeb.CoreComponents do
     ~H"""
     <div class="mb-2">
       <label class="block text-sm text-slate-700">
-        <span :if={@label} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span
+          :if={@label}
+          class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        >
           {@label}
         </span>
         <input
@@ -309,7 +320,8 @@ defmodule BackendWeb.CoreComponents do
           class={[
             @class ||
               "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200",
-            @errors != [] && (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
+            @errors != [] &&
+              (@error_class || "border-rose-300 focus:border-rose-400 focus:ring-rose-200")
           ]}
           {@rest}
         />

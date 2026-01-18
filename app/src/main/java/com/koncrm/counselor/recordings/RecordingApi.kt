@@ -8,6 +8,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
+import com.koncrm.counselor.network.AuthenticatedHttpClient
+
 data class RecordingInitResponse(
     val id: Long,
     val uploadUrl: String,
@@ -15,11 +17,11 @@ data class RecordingInitResponse(
 )
 
 class RecordingApi(
-    private val baseUrl: String,
-    private val client: OkHttpClient = OkHttpClient()
+    private val baseUrl: String
 ) {
+    private val client
+        get() = AuthenticatedHttpClient.getClient()
     suspend fun initRecording(
-        accessToken: String,
         leadId: Long?,
         callLogId: Long?,
         contentType: String,
@@ -36,7 +38,6 @@ class RecordingApi(
 
             val request = Request.Builder()
                 .url("${baseUrl}/api/recordings/init")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 
@@ -57,7 +58,6 @@ class RecordingApi(
         }
 
     suspend fun completeRecording(
-        accessToken: String,
         recordingId: Long,
         fileUrl: String,
         fileSizeBytes: Long,
@@ -72,7 +72,6 @@ class RecordingApi(
 
             val request = Request.Builder()
                 .url("${baseUrl}/api/recordings/${recordingId}/complete")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 

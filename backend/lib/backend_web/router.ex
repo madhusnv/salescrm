@@ -10,6 +10,7 @@ defmodule BackendWeb.Router do
     plug(:put_root_layout, html: {BackendWeb.Layouts, :root})
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
+    plug(BackendWeb.Plugs.SecurityHeaders)
     plug(:fetch_current_scope_for_user)
   end
 
@@ -25,6 +26,10 @@ defmodule BackendWeb.Router do
   pipeline :admin_branch_scoped do
     plug(BackendWeb.Plugs.RequirePermission, "branch.manage")
     plug(BackendWeb.Plugs.RequireBranchScope, param: "branch_id")
+  end
+
+  pipeline :require_admin do
+    plug(BackendWeb.Plugs.RequireAdmin)
   end
 
   scope "/", BackendWeb do
@@ -116,7 +121,7 @@ defmodule BackendWeb.Router do
   end
 
   scope "/admin", BackendWeb do
-    pipe_through([:browser, :require_authenticated_user])
+    pipe_through([:browser, :require_authenticated_user, :require_admin])
 
     live_session :admin,
       on_mount: [{BackendWeb.UserAuth, :require_authenticated}] do
@@ -132,6 +137,8 @@ defmodule BackendWeb.Router do
       live("/recordings", Admin.RecordingLive.Index, :index)
       live("/audit", Admin.AuditLive.Index, :index)
       live("/organization", Admin.OrganizationLive.Settings, :index)
+      live("/counselor-reports", Admin.CounselorReportLive.Index, :index)
+      live("/counselor-reports/:id", Admin.CounselorReportLive.Show, :show)
     end
 
     get("/export/leads", Admin.ExportController, :leads)

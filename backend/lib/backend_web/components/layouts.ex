@@ -67,11 +67,24 @@ defmodule BackendWeb.Layouts do
             Admin
           </p>
           <.sidebar_link href={~p"/admin/users"} icon="hero-user-group">Users</.sidebar_link>
-          <.sidebar_link href={~p"/admin/branches"} icon="hero-building-office-2">Branches</.sidebar_link>
-          <.sidebar_link href={~p"/admin/universities"} icon="hero-academic-cap">Universities</.sidebar_link>
-          <.sidebar_link href={~p"/admin/recordings"} icon="hero-microphone">Recordings</.sidebar_link>
-          <.sidebar_link href={~p"/admin/audit"} icon="hero-document-magnifying-glass">Audit Log</.sidebar_link>
-          <.sidebar_link href={~p"/admin/organization"} icon="hero-cog-6-tooth">Settings</.sidebar_link>
+          <.sidebar_link href={~p"/admin/branches"} icon="hero-building-office-2">
+            Branches
+          </.sidebar_link>
+          <.sidebar_link href={~p"/admin/universities"} icon="hero-academic-cap">
+            Universities
+          </.sidebar_link>
+          <.sidebar_link href={~p"/admin/recordings"} icon="hero-microphone">
+            Recordings
+          </.sidebar_link>
+          <.sidebar_link href={~p"/admin/audit"} icon="hero-document-magnifying-glass">
+            Audit Log
+          </.sidebar_link>
+          <.sidebar_link href={~p"/admin/counselor-reports"} icon="hero-chart-bar">
+            Counselor Reports
+          </.sidebar_link>
+          <.sidebar_link href={~p"/admin/organization"} icon="hero-cog-6-tooth">
+            Settings
+          </.sidebar_link>
         </nav>
 
         <div class="border-t border-slate-100 p-4">

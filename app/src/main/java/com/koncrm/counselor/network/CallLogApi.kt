@@ -9,14 +9,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 class CallLogApi(
-    private val baseUrl: String = ApiConfig.BASE_URL,
-    private val client: OkHttpClient = OkHttpClient()
+    private val baseUrl: String = ApiConfig.BASE_URL
 ) {
-    suspend fun sendCallLog(accessToken: String, payload: JSONObject): Result<String> =
+    private val client: OkHttpClient
+        get() = AuthenticatedHttpClient.getClient()
+
+    suspend fun sendCallLog(payload: JSONObject): Result<String> =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("${baseUrl}/api/call-logs")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 

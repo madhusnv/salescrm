@@ -22,7 +22,10 @@ defmodule BackendWeb.UserLive.Registration do
             </p>
             <p class="mt-6 text-sm text-slate-500">
               Already registered?
-              <.link navigate={~p"/users/log-in"} class="font-semibold text-slate-900 underline-offset-4 hover:underline">
+              <.link
+                navigate={~p"/users/log-in"}
+                class="font-semibold text-slate-900 underline-offset-4 hover:underline"
+              >
                 Log in
               </.link>
               to your account.

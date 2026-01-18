@@ -17,11 +17,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class LeadApi(
-    private val baseUrl: String = ApiConfig.BASE_URL,
-    private val client: OkHttpClient = OkHttpClient()
+    private val baseUrl: String = ApiConfig.BASE_URL
 ) {
+    private val client: OkHttpClient
+        get() = AuthenticatedHttpClient.getClient()
+
     suspend fun listLeads(
-        accessToken: String,
         page: Int,
         pageSize: Int,
         status: String?,
@@ -40,7 +41,6 @@ class LeadApi(
             }
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads?${params.joinToString("&")}")
-                .header("Authorization", "Bearer ${accessToken}")
                 .get()
                 .build()
 
@@ -56,11 +56,10 @@ class LeadApi(
             }
         }
 
-    suspend fun getLead(accessToken: String, leadId: Long): Result<LeadDetail> =
+    suspend fun getLead(leadId: Long): Result<LeadDetail> =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads/${leadId}")
-                .header("Authorization", "Bearer ${accessToken}")
                 .get()
                 .build()
 
@@ -76,11 +75,10 @@ class LeadApi(
             }
         }
 
-    suspend fun listUniversities(accessToken: String): Result<List<University>> =
+    suspend fun listUniversities(): Result<List<University>> =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("${baseUrl}/api/universities")
-                .header("Authorization", "Bearer ${accessToken}")
                 .get()
                 .build()
 
@@ -103,7 +101,6 @@ class LeadApi(
         }
 
     suspend fun createLead(
-        accessToken: String,
         studentName: String,
         phoneNumber: String,
         universityId: Long?
@@ -117,7 +114,6 @@ class LeadApi(
             }
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 
@@ -134,7 +130,6 @@ class LeadApi(
         }
 
     suspend fun listCallLogs(
-        accessToken: String,
         leadId: Long,
         page: Int,
         pageSize: Int
@@ -142,7 +137,6 @@ class LeadApi(
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("${baseUrl}/api/call-logs?lead_id=${leadId}&page=${page}&page_size=${pageSize}")
-                .header("Authorization", "Bearer ${accessToken}")
                 .get()
                 .build()
 
@@ -166,12 +160,11 @@ class LeadApi(
             }
         }
 
-    suspend fun addNote(accessToken: String, leadId: Long, body: String): Result<Unit> =
+    suspend fun addNote(leadId: Long, body: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             val payload = JSONObject().put("body", body)
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads/${leadId}/notes")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 
@@ -184,12 +177,11 @@ class LeadApi(
             }
         }
 
-    suspend fun updateStatus(accessToken: String, leadId: Long, status: String): Result<Unit> =
+    suspend fun updateStatus(leadId: Long, status: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             val payload = JSONObject().put("status", status)
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads/${leadId}/status")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 
@@ -203,7 +195,6 @@ class LeadApi(
         }
 
     suspend fun scheduleFollowup(
-        accessToken: String,
         leadId: Long,
         dueAt: String,
         note: String?
@@ -214,7 +205,6 @@ class LeadApi(
                 .put("note", note)
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads/${leadId}/followups")
-                .header("Authorization", "Bearer ${accessToken}")
                 .post(payload.toString().toRequestBody(JSON))
                 .build()
 
@@ -227,9 +217,8 @@ class LeadApi(
             }
         }
 
-    suspend fun findLeadIdByPhone(accessToken: String, phoneNumber: String): Result<Long?> =
+    suspend fun findLeadIdByPhone(phoneNumber: String): Result<Long?> =
         listLeads(
-            accessToken = accessToken,
             page = 1,
             pageSize = 5,
             status = null,

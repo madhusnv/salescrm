@@ -6,6 +6,7 @@ defmodule Backend.Recordings do
   alias Backend.Analytics
   alias Backend.Recordings.CallRecording
   alias Backend.Repo
+  alias BackendWeb.Broadcaster
 
   def init_recording(%Scope{} = scope, attrs) do
     user = scope.user
@@ -40,6 +41,9 @@ defmodule Backend.Recordings do
               recording_id: updated.id,
               lead_id: updated.lead_id
             })
+
+          # Broadcast real-time update
+          _ = Broadcaster.broadcast_recording_uploaded(scope.user.id, updated)
 
           {:ok, updated}
 

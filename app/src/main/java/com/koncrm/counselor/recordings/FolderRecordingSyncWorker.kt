@@ -37,6 +37,10 @@ class FolderRecordingSyncWorker(
 
     override suspend fun doWork(): Result {
         val session = sessionStore.sessionFlow.firstOrNull() ?: return Result.retry()
+        
+        // Initialize AuthenticatedHttpClient for this worker context  
+        com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
+        
         val folderUri = folderStore.getFolderUri() ?: return Result.success() // No folder selected
 
         return withContext(Dispatchers.IO) {
@@ -57,13 +61,12 @@ class FolderRecordingSyncWorker(
                     // Find matching lead
                     var leadId: Long? = null
                     if (phoneNumber != null) {
-                        val lookupResult = leadApi.findLeadIdByPhone(session.accessToken, phoneNumber)
+                        val lookupResult = leadApi.findLeadIdByPhone(phoneNumber)
                         leadId = lookupResult.getOrNull()
                     }
 
                     // Upload the recording
                     val uploadResult = uploadRecording(
-                        accessToken = session.accessToken,
                         fileUri = file.uri,
                         fileName = file.name,
                         leadId = leadId,
@@ -92,7 +95,6 @@ class FolderRecordingSyncWorker(
     }
 
     private suspend fun uploadRecording(
-        accessToken: String,
         fileUri: Uri,
         fileName: String,
         leadId: Long?,
@@ -105,7 +107,6 @@ class FolderRecordingSyncWorker(
             val contentType = guessContentType(fileName)
 
             val initResult = recordingApi.initRecording(
-                accessToken = accessToken,
                 leadId = leadId,
                 callLogId = null,
                 contentType = contentType,
@@ -121,7 +122,6 @@ class FolderRecordingSyncWorker(
             
             val uploadRequest = Request.Builder()
                 .url(initResult.uploadUrl)
-                .header("Authorization", "Bearer $accessToken")
                 .put(fileBytes.toRequestBody(contentType.toMediaType()))
                 .build()
 
@@ -140,7 +140,6 @@ class FolderRecordingSyncWorker(
             val estimatedDuration = (fileSizeBytes / 12000).coerceAtLeast(1)
 
             recordingApi.completeRecording(
-                accessToken = accessToken,
                 recordingId = initResult.id,
                 fileUrl = fileUrl,
                 fileSizeBytes = uploadedSize,

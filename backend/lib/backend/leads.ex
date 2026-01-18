@@ -8,6 +8,7 @@ defmodule Backend.Leads do
   alias Backend.Accounts.User
   alias Backend.Leads.{Lead, LeadActivity, LeadDedupeCandidate, LeadFollowup}
   alias Backend.Repo
+  alias BackendWeb.Broadcaster
 
   @default_page_size 20
 
@@ -102,6 +103,8 @@ defmodule Backend.Leads do
             lead_id: lead.id,
             status: to_string(lead.status)
           })
+
+        _ = Broadcaster.broadcast_lead_updated(scope.user.id, lead)
 
         {:ok, {lead, activity}}
 
@@ -370,6 +373,8 @@ defmodule Backend.Leads do
         %LeadActivity{lead_id: lead.id, user_id: scope.user.id}
         |> LeadActivity.changeset(activity_attrs)
         |> Repo.insert!()
+
+      _ = Broadcaster.broadcast_lead_assigned(counselor_id, lead)
 
       lead
     end)

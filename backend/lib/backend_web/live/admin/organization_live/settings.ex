@@ -37,55 +37,57 @@ defmodule BackendWeb.Admin.OrganizationLive.Settings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-    <div class="mx-auto max-w-2xl space-y-6">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-        <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
-        <p class="mt-1 text-sm text-slate-500">Configure your organization details and preferences</p>
+      <div class="mx-auto max-w-2xl space-y-6">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
+          <h1 class="mt-2 text-2xl font-semibold text-slate-900">{@page_title}</h1>
+          <p class="mt-1 text-sm text-slate-500">
+            Configure your organization details and preferences
+          </p>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <.form for={@form} phx-submit="save" class="space-y-6">
+            <div class="space-y-4">
+              <h2 class="text-sm font-semibold text-slate-900">Basic Information</h2>
+              <.input field={@form[:name]} type="text" label="Organization Name" required />
+              <.input field={@form[:country]} type="text" label="Country Code" placeholder="IN" />
+            </div>
+
+            <div class="space-y-4">
+              <h2 class="text-sm font-semibold text-slate-900">Timezone & Locale</h2>
+              <.input
+                field={@form[:timezone]}
+                type="select"
+                label="Timezone"
+                options={[
+                  {"Asia/Kolkata (IST)", "Asia/Kolkata"},
+                  {"America/New_York (EST)", "America/New_York"},
+                  {"America/Los_Angeles (PST)", "America/Los_Angeles"},
+                  {"Europe/London (GMT)", "Europe/London"},
+                  {"Asia/Dubai (GST)", "Asia/Dubai"},
+                  {"Asia/Singapore (SGT)", "Asia/Singapore"}
+                ]}
+              />
+            </div>
+
+            <div class="pt-4">
+              <button
+                type="submit"
+                class="inline-flex h-10 items-center rounded-full bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Save Settings
+              </button>
+            </div>
+          </.form>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 class="text-sm font-semibold text-slate-900">Organization ID</h2>
+          <p class="mt-2 font-mono text-sm text-slate-600">{@organization.id}</p>
+          <p class="mt-1 text-xs text-slate-400">Use this ID when integrating with APIs</p>
+        </div>
       </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <.form for={@form} phx-submit="save" class="space-y-6">
-          <div class="space-y-4">
-            <h2 class="text-sm font-semibold text-slate-900">Basic Information</h2>
-            <.input field={@form[:name]} type="text" label="Organization Name" required />
-            <.input field={@form[:country]} type="text" label="Country Code" placeholder="IN" />
-          </div>
-
-          <div class="space-y-4">
-            <h2 class="text-sm font-semibold text-slate-900">Timezone & Locale</h2>
-            <.input
-              field={@form[:timezone]}
-              type="select"
-              label="Timezone"
-              options={[
-                {"Asia/Kolkata (IST)", "Asia/Kolkata"},
-                {"America/New_York (EST)", "America/New_York"},
-                {"America/Los_Angeles (PST)", "America/Los_Angeles"},
-                {"Europe/London (GMT)", "Europe/London"},
-                {"Asia/Dubai (GST)", "Asia/Dubai"},
-                {"Asia/Singapore (SGT)", "Asia/Singapore"}
-              ]}
-            />
-          </div>
-
-          <div class="pt-4">
-            <button
-              type="submit"
-              class="inline-flex h-10 items-center rounded-full bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Save Settings
-            </button>
-          </div>
-        </.form>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="text-sm font-semibold text-slate-900">Organization ID</h2>
-        <p class="mt-2 font-mono text-sm text-slate-600">{@organization.id}</p>
-        <p class="mt-1 text-xs text-slate-400">Use this ID when integrating with APIs</p>
-      </div>
-    </div>
     </Layouts.app>
     """
   end

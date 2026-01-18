@@ -10,16 +10,30 @@ import com.koncrm.counselor.recordings.RecordingStore
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import java.time.Instant
+import android.util.Log
+
+private const val TAG = "CallLogSyncWorker"
 
 class CallLogSyncWorker(
     appContext: Context,
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
+        Log.i(TAG, "Starting call log sync...")
         val sessionStore = SessionStore(applicationContext)
-        val session = sessionStore.sessionFlow.first() ?: return Result.retry()
+        
+        // Initialize AuthenticatedHttpClient for this worker context
+        com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
+        
+        val session = sessionStore.sessionFlow.first()
+        if (session == null) {
+            Log.w(TAG, "No session, retrying later")
+            return Result.retry()
+        }
+        Log.d(TAG, "Session found, proceeding with sync")
         val syncStore = CallLogSyncStore(applicationContext)
         val lastSyncedAt = syncStore.getLastSyncedAt() ?: 0L
+        Log.d(TAG, "Last synced at: $lastSyncedAt")
         val api = CallLogApi()
         val recordingStore = RecordingStore(applicationContext)
         val recordingState = recordingStore.stateFlow().first()
@@ -38,10 +52,11 @@ class CallLogSyncWorker(
         var duplicateCount = 0
         var failureCount = 0
 
+        val batchSize = 50
         while (true) {
             val selection = if (newestTimestamp > 0L) "${CallLog.Calls.DATE} > ?" else null
             val selectionArgs = if (newestTimestamp > 0L) arrayOf(newestTimestamp.toString()) else null
-            val sortOrder = "${CallLog.Calls.DATE} ASC LIMIT 50"
+            val sortOrder = "${CallLog.Calls.DATE} ASC"
 
             val cursor = try {
                 resolver.query(
@@ -51,7 +66,8 @@ class CallLogSyncWorker(
                     selectionArgs,
                     sortOrder
                 )
-            } catch (_: SecurityException) {
+            } catch (e: SecurityException) {
+                Log.e(TAG, "SecurityException querying call log", e)
                 return Result.retry()
             }
 
@@ -63,7 +79,7 @@ class CallLogSyncWorker(
                 val dateIndex = it.getColumnIndex(CallLog.Calls.DATE)
                 val durationIndex = it.getColumnIndex(CallLog.Calls.DURATION)
 
-                while (it.moveToNext()) {
+                while (it.moveToNext() && batchCount < batchSize) {
                     batchCount += 1
                     val callId = it.getLong(idIndex)
                     val number = it.getString(numberIndex).orEmpty()
@@ -93,7 +109,7 @@ class CallLogSyncWorker(
                             JSONObject().put("call_log_id", callId).put("source", "android")
                         )
 
-                    val result = api.sendCallLog(session.accessToken, payload)
+                    val result = api.sendCallLog(payload)
                     if (result.isFailure) {
                         failureCount += 1
                         hasFailures = true
@@ -116,6 +132,7 @@ class CallLogSyncWorker(
         }
 
         syncStore.setStats(syncedCount, duplicateCount, failureCount, newestTimestamp)
+        Log.i(TAG, "Sync complete: synced=$syncedCount, duplicates=$duplicateCount, failures=$failureCount")
 
         return if (hasFailures) Result.retry() else Result.success()
     }
