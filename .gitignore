@@ -1,83 +1,201 @@
-# OS files
+# ========================================
+# OS Files
+# ========================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# IDE
+# ========================================
+# IDE & Editor
+# ========================================
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 *.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Elixir/Phoenix
+# ========================================
+# Android / Gradle
+# ========================================
+# Gradle build directories
+.gradle/
+.gradle-home/
+build/
+*/build/
+
+# Gradle wrapper (if not committing)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Local properties (API keys, SDK paths)
+local.properties
+
+# Android build outputs
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Keystore files
+*.jks
+*.keystore
+
+# Android profiling
+*.hprof
+/captures/
+
+# Native build directories
+.externalNativeBuild/
+.cxx/
+
+# Release signing configs
+/app/release/
+signing.properties
+keystore.properties
+
+# ========================================
+# Kotlin
+# ========================================
+.kotlin/
+*.kotlin_module
+
+# ========================================
+# Elixir / Phoenix (Backend)
+# ========================================
+# Compiled artifacts
+backend/_build/
 _build/
+
+# Dependencies
+backend/deps/
 deps/
+
+# Coverage and docs
+backend/cover/
+backend/doc/
+/cover/
+/doc/
+
+# ElixirLS
 .elixir_ls/
+
+# Compiled beam files
 *.ez
 *.beam
-erl_crash.dump
 *.plt
 *.plts
 
-# Node.js (for Phoenix assets)
+# Erlang crash dumps
+erl_crash.dump
+
+# Mix archives
+backend-*.tar
+
+# ========================================
+# Phoenix Assets
+# ========================================
+backend/priv/static/assets/
+backend/priv/static/cache_manifest.json
+backend/assets/node_modules/
+/priv/static/assets/
+/priv/static/cache_manifest.json
+
+# ========================================
+# Node.js
+# ========================================
 node_modules/
-npm-debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
 
-# Phoenix
-/backend/priv/static/assets/
-/backend/.env
-/backend/.env.*
-/backend/config/*.secret.exs
-
-# Uploads and generated files
-/backend/priv/static/uploads/
-
-# Android
-.gradle/
-build/
-local.properties
-*.apk
-*.aab
-*.ap_
-*.dex
-*.class
-*.jks
-*.keystore
-/app/release/
-/app/build/
-*.hprof
-/captures
-.externalNativeBuild
-.cxx
-
-# Kotlin
-*.kotlin_module
-
-# Secrets
-*.secret
-*.pem
-*.key
-secrets/
-
-# Logs
-*.log
-logs/
-
-# Test artifacts
-/backend/cover/
-/backend/doc/
-
-# Temporary files
-tmp/
-*.tmp
-*.temp
-
-# Database
-*.db
-*.sqlite3
-
-# Environment
+# ========================================
+# Environment & Secrets
+# ========================================
 .env
+.env.*
 .env.local
 .env.*.local
+!.env.example
+!.env.sample
+
+# Config secrets
+backend/config/*.secret.exs
+*.secret
+*.secret.exs
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+
+# ========================================
+# Uploads & User Data
+# ========================================
+backend/priv/static/uploads/
+/priv/static/uploads/
+uploads/
+
+# ========================================
+# Logs
+# ========================================
+*.log
+logs/
+log/
+
+# ========================================
+# Temporary Files
+# ========================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ========================================
+# Database
+# ========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ========================================
+# Docker (if applicable)
+# ========================================
+.docker/
+
+# ========================================
+# Test Artifacts
+# ========================================
+/test-results/
+/coverage/
+.nyc_output/
+
+# ========================================
+# Misc
+# ========================================
+*.orig
+*.rej
+*.patch
+
+# CSV test files (remove if you want to track them)
+# test_leads*.csv

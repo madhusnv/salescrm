@@ -2,6 +2,7 @@ defmodule Backend.Recordings do
   import Ecto.Query, warn: false
 
   alias Backend.Accounts.Scope
+  alias Backend.Access
   alias Backend.Audit
   alias Backend.Analytics
   alias Backend.Recordings.CallRecording
@@ -26,30 +27,37 @@ defmodule Backend.Recordings do
   def complete_recording(%Scope{} = scope, recording_id, attrs) do
     recording = Repo.get!(CallRecording, recording_id)
 
-    if recording.organization_id != scope.user.organization_id do
-      {:error, :forbidden}
-    else
-      recording
-      |> CallRecording.complete_changeset(attrs)
-      |> Repo.update()
-      |> case do
-        {:ok, updated} ->
-          _ = Analytics.log_event(scope, "recording_uploaded", %{lead_id: updated.lead_id})
+    cond do
+      recording.organization_id != scope.user.organization_id ->
+        {:error, :forbidden}
 
-          _ =
-            Audit.log(scope, "recording.completed", %{
-              recording_id: updated.id,
-              lead_id: updated.lead_id
-            })
+      recording.counselor_id != scope.user.id and not Access.super_admin?(scope.user) ->
+        {:error, :forbidden}
 
-          # Broadcast real-time update
-          _ = Broadcaster.broadcast_recording_uploaded(scope.user.id, updated)
+      true ->
+        attrs = maybe_put_file_url(recording, attrs)
 
-          {:ok, updated}
+        recording
+        |> CallRecording.complete_changeset(attrs)
+        |> Repo.update()
+        |> case do
+          {:ok, updated} ->
+            _ = Analytics.log_event(scope, "recording_uploaded", %{lead_id: updated.lead_id})
 
-        {:error, changeset} ->
-          {:error, changeset}
-      end
+            _ =
+              Audit.log(scope, "recording.completed", %{
+                recording_id: updated.id,
+                lead_id: updated.lead_id
+              })
+
+            # Broadcast real-time update
+            _ = Broadcaster.broadcast_recording_uploaded(scope.user.id, updated)
+
+            {:ok, updated}
+
+          {:error, changeset} ->
+            {:error, changeset}
+        end
     end
   end
 
@@ -73,12 +81,15 @@ defmodule Backend.Recordings do
   end
 
   def get_playback_url(%CallRecording{} = recording) do
-    # For local file storage, return the static path
-    if recording.storage_key do
-      url = "/uploads/#{recording.storage_key}"
-      {:ok, url}
-    else
-      {:error, :no_file}
+    cond do
+      is_binary(recording.storage_key) and recording.storage_key != "" ->
+        {:ok, "/uploads/#{recording.storage_key}"}
+
+      is_binary(recording.file_url) and String.starts_with?(recording.file_url, "/uploads/") ->
+        {:ok, recording.file_url}
+
+      true ->
+        {:error, :no_file}
     end
   end
 
@@ -135,5 +146,31 @@ defmodule Backend.Recordings do
           :error
       end
     end)
+  end
+
+  defp maybe_put_file_url(recording, attrs) when is_map(attrs) do
+    file_url = expected_file_url(recording) || validated_file_url(attrs)
+
+    if is_binary(file_url) do
+      Map.put(attrs, "file_url", file_url)
+    else
+      attrs
+    end
+  end
+
+  defp expected_file_url(%CallRecording{storage_key: key}) when is_binary(key) and key != "" do
+    "/uploads/#{key}"
+  end
+
+  defp expected_file_url(_), do: nil
+
+  defp validated_file_url(attrs) do
+    file_url = Map.get(attrs, "file_url") || Map.get(attrs, :file_url)
+
+    if is_binary(file_url) and String.starts_with?(file_url, "/uploads/") do
+      file_url
+    else
+      nil
+    end
   end
 end

@@ -1,6 +1,8 @@
 package com.koncrm.counselor.network
 
 import com.koncrm.counselor.auth.SessionStore
+import com.koncrm.counselor.auth.SessionTokens
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
 import okhttp3.Request
@@ -32,11 +34,7 @@ class TokenAuthenticator(
         }
 
         val currentTokens = runBlocking { 
-            sessionStore.sessionFlow.let { flow ->
-                var tokens: com.koncrm.counselor.auth.SessionTokens? = null
-                flow.collect { tokens = it; return@collect }
-                tokens
-            }
+            sessionStore.sessionFlow.first()
         }
 
         if (currentTokens == null) {
@@ -46,9 +44,7 @@ class TokenAuthenticator(
         synchronized(lock) {
             // Check if another thread already refreshed the token
             val latestTokens = runBlocking {
-                var tokens: com.koncrm.counselor.auth.SessionTokens? = null
-                sessionStore.sessionFlow.collect { tokens = it; return@collect }
-                tokens
+                sessionStore.sessionFlow.first()
             }
 
             // If token changed since the failed request, retry with new token

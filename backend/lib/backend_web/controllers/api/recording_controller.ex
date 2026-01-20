@@ -3,7 +3,18 @@ defmodule BackendWeb.Api.RecordingController do
 
   # 50MB
   @max_upload_size_bytes 50 * 1024 * 1024
-  @allowed_content_types ["audio/m4a", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"]
+  @allowed_content_types [
+    "audio/m4a",
+    "audio/mp4",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/x-m4a",
+    "audio/amr",
+    "audio/ogg",
+    "audio/3gpp",
+    "audio/aac",
+    "audio/x-aac"
+  ]
 
   plug(
     BackendWeb.Plugs.RequirePermission,
@@ -13,6 +24,7 @@ defmodule BackendWeb.Api.RecordingController do
   plug(BackendWeb.Plugs.RequirePermission, "recording.read" when action in [:index])
 
   alias Backend.Accounts.Scope
+  alias Backend.Access
   alias Backend.Audit
   alias Backend.Recordings
 
@@ -31,7 +43,7 @@ defmodule BackendWeb.Api.RecordingController do
         "content_type" => content_type,
         "consent_granted" => Map.get(params, "consent_granted", false),
         "recorded_at" => parse_datetime(Map.get(params, "recorded_at")),
-        "storage_key" => build_storage_key(scope.user.id)
+        "storage_key" => build_storage_key(scope.user.id, content_type)
       }
 
       case Recordings.init_recording(scope, attrs) do
@@ -86,12 +98,12 @@ defmodule BackendWeb.Api.RecordingController do
     scope = Scope.for_user(conn.assigns.current_user)
 
     with recording when not is_nil(recording) <- Recordings.get_recording(scope, id),
+         :ok <- authorize_recording(scope, recording),
          :ok <- validate_storage_key(recording.storage_key),
          {:ok, file_bytes} <- extract_upload_bytes(conn),
          :ok <- validate_file_size(file_bytes) do
-      # Use safe path construction - never trust DB value directly
-      safe_storage_key = "recordings/#{scope.user.id}/#{recording.id}.m4a"
       uploads_root = Path.join([:code.priv_dir(:backend), "static", "uploads"])
+      safe_storage_key = recording.storage_key
       target_path = Path.join(uploads_root, safe_storage_key)
 
       # Verify path is still under uploads_root (defense in depth)
@@ -132,6 +144,11 @@ defmodule BackendWeb.Api.RecordingController do
         |> put_status(:unprocessable_entity)
         |> json(%{error: "invalid_storage_key"})
 
+      {:error, :forbidden} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "forbidden"})
+
       {:error, :invalid_upload} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -166,15 +183,33 @@ defmodule BackendWeb.Api.RecordingController do
 
   defp parse_datetime(_), do: nil
 
-  defp build_storage_key(user_id) do
-    "recordings/#{user_id}/#{Ecto.UUID.generate()}.m4a"
+  defp build_storage_key(user_id, content_type) do
+    ext = extension_for_content_type(content_type)
+    "recordings/#{user_id}/#{Ecto.UUID.generate()}.#{ext}"
+  end
+
+  defp extension_for_content_type(content_type) do
+    case content_type do
+      "audio/m4a" -> "m4a"
+      "audio/x-m4a" -> "m4a"
+      "audio/mp4" -> "m4a"
+      "audio/mpeg" -> "mp3"
+      "audio/wav" -> "wav"
+      "audio/amr" -> "amr"
+      "audio/ogg" -> "ogg"
+      "audio/3gpp" -> "3gp"
+      "audio/aac" -> "aac"
+      "audio/x-aac" -> "aac"
+      _ -> "m4a"
+    end
   end
 
   defp placeholder_upload_url(recording_id) do
     BackendWeb.Endpoint.url() <> "/api/recordings/#{recording_id}/upload"
   end
 
-  defp validate_storage_key(nil), do: :ok
+  defp validate_storage_key(nil), do: {:error, :invalid_storage_key}
+  defp validate_storage_key(""), do: {:error, :invalid_storage_key}
 
   defp validate_storage_key(key) when is_binary(key) do
     if String.contains?(key, ["../", "..\\", "\\"]) or String.starts_with?(key, "/") do
@@ -230,5 +265,13 @@ defmodule BackendWeb.Api.RecordingController do
         String.replace(acc, "%{#{key}}", to_string(value))
       end)
     end)
+  end
+
+  defp authorize_recording(scope, recording) do
+    if recording.counselor_id == scope.user.id or Access.super_admin?(scope.user) do
+      :ok
+    else
+      {:error, :forbidden}
+    end
   end
 end

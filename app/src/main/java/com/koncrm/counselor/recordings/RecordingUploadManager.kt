@@ -70,7 +70,8 @@ class RecordingUploadManager(
         runCatching {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    throw IllegalStateException("Recording upload failed with ${response.code}")
+                    val errorBody = response.body?.string() ?: ""
+                    throw IllegalStateException("Recording upload failed with ${response.code}: $errorBody")
                 }
                 val responseBody = response.body?.string().orEmpty()
                 val data = JSONObject(responseBody).getJSONObject("data")

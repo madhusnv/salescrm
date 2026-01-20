@@ -1,6 +1,8 @@
 package com.koncrm.counselor.network
 
 import com.koncrm.counselor.auth.SessionStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -10,10 +12,10 @@ import java.util.concurrent.TimeUnit
  * Provides a configured OkHttpClient with automatic token refresh capability.
  */
 object AuthenticatedHttpClient {
-    
+
     @Volatile
     private var instance: OkHttpClient? = null
-    
+
     @Volatile
     private var sessionStore: SessionStore? = null
 
@@ -35,7 +37,7 @@ object AuthenticatedHttpClient {
     }
 
     private fun buildClient(): OkHttpClient {
-        val store = sessionStore 
+        val store = sessionStore
             ?: throw IllegalStateException("AuthenticatedHttpClient not initialized. Call init() first.")
 
         return OkHttpClient.Builder()
@@ -55,18 +57,17 @@ object AuthenticatedHttpClient {
     ) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val originalRequest = chain.request()
-            
+
             // Skip if already has Authorization header or is an auth endpoint
             if (originalRequest.header("Authorization") != null ||
+                !originalRequest.url.encodedPath.startsWith("/api/") ||
                 originalRequest.url.encodedPath.contains("/api/auth/")) {
                 return chain.proceed(originalRequest)
             }
 
             // Get current token synchronously
-            val tokens = kotlinx.coroutines.runBlocking {
-                var result: com.koncrm.counselor.auth.SessionTokens? = null
-                sessionStore.sessionFlow.collect { result = it; return@collect }
-                result
+            val tokens = runBlocking {
+                sessionStore.sessionFlow.first()
             }
 
             val request = if (tokens != null) {

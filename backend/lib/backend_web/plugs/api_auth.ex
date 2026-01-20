@@ -20,7 +20,10 @@ defmodule BackendWeb.Plugs.ApiAuth do
       |> assign(:current_scope, Scope.for_user(user))
     else
       error ->
-        Logger.warning("ApiAuth failed: #{inspect(error)}, auth_header=#{inspect(get_req_header(conn, "authorization"))}")
+        Logger.warning(
+          "ApiAuth failed: #{inspect(error)}, auth_header=#{inspect(get_req_header(conn, "authorization"))}"
+        )
+
         conn
     end
   end

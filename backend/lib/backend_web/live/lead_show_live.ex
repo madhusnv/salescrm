@@ -244,7 +244,9 @@ defmodule BackendWeb.LeadShowLive do
               <h2 class="text-lg font-semibold text-slate-900">Timeline</h2>
             </div>
             <div id="lead-activities" phx-update="stream" class="mt-6 space-y-4">
-              <div class="hidden text-sm text-slate-500 only:block">No activity yet.</div>
+              <div id="lead-activities-empty" class="hidden text-sm text-slate-500 only:block">
+                No activity yet.
+              </div>
               <div
                 :for={{id, activity} <- @streams.activities}
                 id={id}
@@ -321,7 +323,9 @@ defmodule BackendWeb.LeadShowLive do
                 </span>
               </div>
               <div id="lead-recordings" phx-update="stream" class="mt-4 space-y-4">
-                <div class="hidden text-sm text-slate-500 only:block">No recordings yet.</div>
+                <div id="lead-recordings-empty" class="hidden text-sm text-slate-500 only:block">
+                  No recordings yet.
+                </div>
                 <div
                   :for={{id, recording} <- @streams.recordings}
                   id={id}
@@ -351,7 +355,9 @@ defmodule BackendWeb.LeadShowLive do
                 <h2 class="text-lg font-semibold text-slate-900">Follow-ups</h2>
               </div>
               <div id="lead-followups" phx-update="stream" class="mt-4 space-y-3">
-                <div class="hidden text-sm text-slate-500 only:block">No follow-ups yet.</div>
+                <div id="lead-followups-empty" class="hidden text-sm text-slate-500 only:block">
+                  No follow-ups yet.
+                </div>
                 <div
                   :for={{id, followup} <- @streams.followups}
                   id={id}
@@ -415,9 +421,12 @@ defmodule BackendWeb.LeadShowLive do
   defp format_datetime(nil), do: nil
 
   defp format_datetime(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.shift_zone!("Asia/Kolkata")
-    |> Calendar.strftime("%d %b %Y, %I:%M %p")
+    formatted = Calendar.strftime(datetime, "%d %b %Y, %I:%M %p")
+
+    case DateTime.shift_zone(datetime, "Asia/Kolkata") do
+      {:ok, shifted} -> Calendar.strftime(shifted, "%d %b %Y, %I:%M %p")
+      {:error, _} -> formatted
+    end
   end
 
   defp humanize_activity(type) do

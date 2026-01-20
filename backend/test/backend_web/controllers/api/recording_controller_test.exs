@@ -70,6 +70,7 @@ defmodule BackendWeb.Api.RecordingControllerTest do
 
     conn =
       conn
+      |> recycle()
       |> put_req_header("content-type", "audio/m4a")
       |> put(~p"/api/recordings/#{recording_id}/upload", upload_body)
 
@@ -82,7 +83,12 @@ defmodule BackendWeb.Api.RecordingControllerTest do
       "duration_seconds" => 5
     }
 
-    conn = post(conn, ~p"/api/recordings/#{recording_id}/complete", complete_params)
+    conn =
+      conn
+      |> recycle()
+      |> put_req_header("content-type", "application/json")
+      |> post(~p"/api/recordings/#{recording_id}/complete", complete_params)
+
     assert %{"data" => %{"status" => "uploaded"}} = json_response(conn, 200)
 
     recording = Repo.get!(CallRecording, recording_id)

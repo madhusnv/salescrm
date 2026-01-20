@@ -44,7 +44,8 @@ class RecordingApi(
             runCatching {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("Recording init failed with ${response.code}")
+                        val errorBody = response.body?.string() ?: ""
+                        throw IllegalStateException("Recording init failed with ${response.code}: $errorBody")
                     }
                     val body = response.body?.string().orEmpty()
                     val data = JSONObject(body).getJSONObject("data")
@@ -78,7 +79,8 @@ class RecordingApi(
             runCatching {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("Recording complete failed with ${response.code}")
+                        val errorBody = response.body?.string() ?: ""
+                        throw IllegalStateException("Recording complete failed with ${response.code}: $errorBody")
                     }
                 }
             }

@@ -24,7 +24,8 @@ class CallLogApi(
             runCatching {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("Call log sync failed with ${response.code}")
+                        val errorBody = response.body?.string() ?: ""
+                        throw IllegalStateException("Call log sync failed with ${response.code}: $errorBody")
                     }
                     val body = response.body?.string().orEmpty()
                     if (body.isBlank()) {

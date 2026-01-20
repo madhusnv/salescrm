@@ -7,7 +7,7 @@ defmodule Backend.CsvParserPropertyTest do
   property "parses valid lead CSV rows" do
     check all(
             name <- string(:alphanumeric, min_length: 1),
-            phone <- string(:numeric, min_length: 10, max_length: 12)
+            phone <- string(?0..?9, min_length: 10, max_length: 12)
           ) do
       csv = "student_name,phone_number\n#{name},#{phone}\n"
 

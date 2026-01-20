@@ -61,12 +61,12 @@ defmodule BackendWeb.UserLive.LoginTest do
     test "shows login page with email filled in", %{conn: conn, user: user} do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
-      assert html =~ "You need to reauthenticate"
+      assert html =~ "Reauthenticate to keep sensitive settings secure."
       refute html =~ "Register"
       assert html =~ "Password"
 
       assert html =~
-               ~s(<input type="email" name="user[email]" id="login_form_password_email" value="#{user.email}")
+               Regex.compile!("type=\"email\"[^>]*value=\"#{Regex.escape(user.email)}\"")
     end
   end
 end

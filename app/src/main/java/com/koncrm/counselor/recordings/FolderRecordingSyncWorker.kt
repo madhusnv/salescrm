@@ -6,12 +6,12 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.work.*
 import com.koncrm.counselor.auth.SessionStore
 import com.koncrm.counselor.network.ApiConfig
+import com.koncrm.counselor.network.AuthenticatedHttpClient
 import com.koncrm.counselor.network.LeadApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -33,14 +33,15 @@ class FolderRecordingSyncWorker(
     private val sessionStore = SessionStore(applicationContext)
     private val leadApi = LeadApi()
     private val recordingApi = RecordingApi(ApiConfig.BASE_URL)
-    private val client = OkHttpClient()
+    private val client
+        get() = AuthenticatedHttpClient.getClient()
 
     override suspend fun doWork(): Result {
-        val session = sessionStore.sessionFlow.firstOrNull() ?: return Result.retry()
-        
-        // Initialize AuthenticatedHttpClient for this worker context  
-        com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
-        
+        if (sessionStore.sessionFlow.firstOrNull() == null) return Result.retry()
+
+        // Initialize AuthenticatedHttpClient for this worker context
+        AuthenticatedHttpClient.init(sessionStore)
+
         val folderUri = folderStore.getFolderUri() ?: return Result.success() // No folder selected
 
         return withContext(Dispatchers.IO) {
@@ -57,7 +58,7 @@ class FolderRecordingSyncWorker(
 
                     // Try to extract phone number from filename
                     val phoneNumber = extractPhoneFromFilename(file.name)
-                    
+
                     // Find matching lead
                     var leadId: Long? = null
                     if (phoneNumber != null) {
@@ -89,6 +90,7 @@ class FolderRecordingSyncWorker(
                     )
                 )
             } catch (e: Exception) {
+                android.util.Log.e("FolderRecordingSync", "Recording sync failed", e)
                 Result.retry()
             }
         }
@@ -117,11 +119,12 @@ class FolderRecordingSyncWorker(
             // 2. Upload file bytes
             val inputStream: InputStream = applicationContext.contentResolver.openInputStream(fileUri)
                 ?: throw IllegalStateException("Cannot read file: $fileUri")
-            
+
             val fileBytes = inputStream.use { it.readBytes() }
-            
+
             val uploadRequest = Request.Builder()
                 .url(initResult.uploadUrl)
+                .header("Accept", "application/json")
                 .put(fileBytes.toRequestBody(contentType.toMediaType()))
                 .build()
 
@@ -151,7 +154,7 @@ class FolderRecordingSyncWorker(
     private fun extractPhoneFromFilename(filename: String): String? {
         // Extract digits from filename
         val digits = filename.filter { it.isDigit() }
-        
+
         // Phone numbers are typically 10+ digits
         return if (digits.length >= 10) {
             digits.takeLast(10)
@@ -168,6 +171,7 @@ class FolderRecordingSyncWorker(
             filename.endsWith(".wav", ignoreCase = true) -> "audio/wav"
             filename.endsWith(".ogg", ignoreCase = true) -> "audio/ogg"
             filename.endsWith(".3gp", ignoreCase = true) -> "audio/3gpp"
+            filename.endsWith(".aac", ignoreCase = true) -> "audio/aac"
             else -> "audio/mpeg"
         }
     }

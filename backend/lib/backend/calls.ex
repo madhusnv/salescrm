@@ -27,8 +27,12 @@ defmodule Backend.Calls do
     |> Repo.all()
   end
 
-  def get_call_log_by_device_id(organization_id, device_call_id) do
-    Repo.get_by(CallLog, organization_id: organization_id, device_call_id: device_call_id)
+  def get_call_log_by_device_id(organization_id, counselor_id, device_call_id) do
+    Repo.get_by(CallLog,
+      organization_id: organization_id,
+      counselor_id: counselor_id,
+      device_call_id: device_call_id
+    )
   end
 
   def create_call_log(%Scope{} = scope, attrs) when is_map(attrs) do
@@ -43,7 +47,7 @@ defmodule Backend.Calls do
       device_call_id =
         Map.get(attrs, "device_call_id") || Map.get(attrs, :device_call_id) || ""
 
-      case get_call_log_by_device_id(user.organization_id, device_call_id) do
+      case get_call_log_by_device_id(user.organization_id, user.id, device_call_id) do
         %CallLog{} = existing ->
           {:ok, existing, :duplicate}
 
