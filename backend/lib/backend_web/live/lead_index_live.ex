@@ -1,24 +1,21 @@
 defmodule BackendWeb.LeadIndexLive do
   use BackendWeb, :live_view
 
-  import Ecto.Query, warn: false
-
   alias Backend.Accounts
-  alias Backend.Access
+  alias Backend.Access.Policy
   alias Backend.Leads
   alias Backend.Leads.Lead
-  alias Backend.Repo
 
-  on_mount({BackendWeb.RequirePermissionOnMount, "lead.read"})
+  on_mount({BackendWeb.RequirePermissionOnMount, Policy.lead_read_permissions()})
 
   @page_size 20
 
   @impl true
   def mount(_params, _session, socket) do
-    user = socket.assigns.current_scope.user
-    role_name = role_name(user)
-    counselors = list_counselors(user, role_name)
-    can_assign = Access.role_has_permission?(user, "lead.assign")
+    scope = socket.assigns.current_scope
+    counselors = list_counselors(scope)
+    can_assign = Policy.can_assign_leads?(scope)
+    show_counselor_filter = Policy.can_read_branch_leads?(scope)
 
     socket =
       socket
@@ -28,7 +25,7 @@ defmodule BackendWeb.LeadIndexLive do
       |> assign(:total_count, 0)
       |> assign(:total_pages, 1)
       |> assign(:page_links, %{prev: nil, next: nil})
-      |> assign(:show_counselor_filter, role_name in ["Super Admin", "Branch Manager"])
+      |> assign(:show_counselor_filter, show_counselor_filter)
       |> assign(:counselors, counselors)
       |> assign(:counselor_options, counselor_options(counselors))
       |> assign(:status_options, status_options())
@@ -181,21 +178,17 @@ defmodule BackendWeb.LeadIndexLive do
     )
   end
 
-  defp list_counselors(user, role_name) do
-    cond do
-      Access.super_admin?(user) ->
-        Accounts.list_counselors(user.organization_id)
+  defp list_counselors(scope) do
+    case Policy.lead_access_level(scope) do
+      :organization ->
+        Accounts.list_counselors(scope.organization_id)
 
-      role_name == "Branch Manager" ->
-        Accounts.list_counselors(user.organization_id, user.branch_id)
+      :branch ->
+        Accounts.list_counselors(scope.organization_id, scope.branch_id)
 
-      true ->
+      :own ->
         []
     end
-  end
-
-  defp role_name(user) do
-    Repo.one(from(r in Backend.Access.Role, where: r.id == ^user.role_id, select: r.name))
   end
 
   defp humanize_status(status) do

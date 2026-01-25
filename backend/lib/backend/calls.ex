@@ -5,6 +5,7 @@ defmodule Backend.Calls do
   alias Backend.Analytics
   alias Backend.Calls.CallLog
   alias Backend.Leads
+  alias Backend.Leads.Lead
   alias Backend.Repo
   alias BackendWeb.Broadcaster
 
@@ -75,6 +76,7 @@ defmodule Backend.Calls do
                 _ = Analytics.log_event(scope, "consent_captured", %{lead_id: call_log.lead_id})
               end
 
+              _ = maybe_mark_lead_contacted(scope, lead, call_log)
               _ = Broadcaster.broadcast_call_synced(scope.user.id, call_log)
 
               {:ok, call_log, :created}
@@ -84,5 +86,24 @@ defmodule Backend.Calls do
           end
       end
     end
+  end
+
+  defp maybe_mark_lead_contacted(%Scope{} = scope, %Lead{} = lead, %CallLog{} = call_log) do
+    if should_mark_contacted?(lead, call_log) do
+      case Leads.update_lead_status(scope, lead, :contacted) do
+        {:ok, _} -> :ok
+        {:error, _reason} -> :error
+      end
+    else
+      :noop
+    end
+  end
+
+  defp maybe_mark_lead_contacted(_scope, _lead, _call_log), do: :noop
+
+  defp should_mark_contacted?(%Lead{} = lead, %CallLog{} = call_log) do
+    lead.status == :new and
+      call_log.call_type in [:incoming, :outgoing] and
+      (call_log.duration_seconds || 0) >= 10
   end
 end

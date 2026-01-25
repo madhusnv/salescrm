@@ -84,9 +84,9 @@ fun LeadCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -114,7 +114,7 @@ fun LeadCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    
+
                     // University if available
                     lead.universityName?.let { uni ->
                         Text(
@@ -158,6 +158,11 @@ fun StatusPill(
             Color(0xFFEEF2FF), // Light indigo
             Color(0xFF4F46E5), // Indigo
             "New"
+        )
+        "contacted" -> Triple(
+            Color(0xFFE0F2F1), // Light teal
+            Color(0xFF0F766E), // Teal
+            "Contacted"
         )
         "follow_up" -> Triple(
             Color(0xFFFEF3C7), // Light amber

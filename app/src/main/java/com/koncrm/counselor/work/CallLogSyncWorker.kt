@@ -21,10 +21,10 @@ class CallLogSyncWorker(
     override suspend fun doWork(): Result {
         Log.i(TAG, "Starting call log sync...")
         val sessionStore = SessionStore(applicationContext)
-        
+
         // Initialize AuthenticatedHttpClient for this worker context
         com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
-        
+
         val session = sessionStore.sessionFlow.first()
         if (session == null) {
             Log.w(TAG, "No session, retrying later")
@@ -33,6 +33,7 @@ class CallLogSyncWorker(
         Log.d(TAG, "Session found, proceeding with sync")
         val syncStore = CallLogSyncStore(applicationContext)
         val lastSyncedAt = syncStore.getLastSyncedAt() ?: 0L
+        val lastSyncedCallId = syncStore.getLastSyncedCallId() ?: 0L
         Log.d(TAG, "Last synced at: $lastSyncedAt")
         val api = CallLogApi()
         val recordingStore = RecordingStore(applicationContext)
@@ -47,16 +48,32 @@ class CallLogSyncWorker(
             CallLog.Calls.DURATION
         )
         var newestTimestamp = lastSyncedAt
+        var newestCallId = lastSyncedCallId
         var hasFailures = false
         var syncedCount = 0
         var duplicateCount = 0
         var failureCount = 0
+        var skippedCount = 0
 
         val batchSize = 50
         while (true) {
-            val selection = if (newestTimestamp > 0L) "${CallLog.Calls.DATE} > ?" else null
-            val selectionArgs = if (newestTimestamp > 0L) arrayOf(newestTimestamp.toString()) else null
-            val sortOrder = "${CallLog.Calls.DATE} ASC"
+            val selection =
+                if (newestTimestamp > 0L) {
+                    "(${CallLog.Calls.DATE} > ?) OR (${CallLog.Calls.DATE} = ? AND ${CallLog.Calls._ID} > ?)"
+                } else {
+                    null
+                }
+            val selectionArgs =
+                if (newestTimestamp > 0L) {
+                    arrayOf(
+                        newestTimestamp.toString(),
+                        newestTimestamp.toString(),
+                        newestCallId.toString()
+                    )
+                } else {
+                    null
+                }
+            val sortOrder = "${CallLog.Calls.DATE} ASC, ${CallLog.Calls._ID} ASC"
 
             val cursor = try {
                 resolver.query(
@@ -86,6 +103,19 @@ class CallLogSyncWorker(
                     val callType = mapCallType(it.getInt(typeIndex))
                     val timestamp = it.getLong(dateIndex)
                     val durationSeconds = it.getLong(durationIndex)
+                    val normalizedNumber = normalizePhoneNumber(number)
+
+                    if (normalizedNumber.length < 6) {
+                        skippedCount += 1
+                        if (timestamp > newestTimestamp) {
+                            newestTimestamp = timestamp
+                            newestCallId = callId
+                        } else if (timestamp == newestTimestamp && callId > newestCallId) {
+                            newestCallId = callId
+                        }
+                        Log.w(TAG, "Skipping short/invalid number: '$number'")
+                        continue
+                    }
 
                     val startedAt = Instant.ofEpochMilli(timestamp)
                     val endedAt = if (durationSeconds > 0) {
@@ -112,6 +142,7 @@ class CallLogSyncWorker(
                     val result = api.sendCallLog(payload)
                     if (result.isFailure) {
                         failureCount += 1
+                        Log.e(TAG, "Call log sync failed: ${result.exceptionOrNull()?.message}")
                         hasFailures = true
                         break
                     } else {
@@ -121,9 +152,12 @@ class CallLogSyncWorker(
                         }
                         if (timestamp > newestTimestamp) {
                             newestTimestamp = timestamp
+                            newestCallId = callId
+                        } else if (timestamp == newestTimestamp && callId > newestCallId) {
+                            newestCallId = callId
                         }
-                    }
                 }
+            }
             }
 
             if (hasFailures || batchCount == 0) {
@@ -131,8 +165,11 @@ class CallLogSyncWorker(
             }
         }
 
-        syncStore.setStats(syncedCount, duplicateCount, failureCount, newestTimestamp)
-        Log.i(TAG, "Sync complete: synced=$syncedCount, duplicates=$duplicateCount, failures=$failureCount")
+        syncStore.setStats(syncedCount, duplicateCount, failureCount, newestTimestamp, newestCallId)
+        Log.i(
+            TAG,
+            "Sync complete: synced=$syncedCount, duplicates=$duplicateCount, failures=$failureCount, skipped=$skippedCount"
+        )
 
         return if (hasFailures) Result.retry() else Result.success()
     }
@@ -145,6 +182,15 @@ class CallLogSyncWorker(
             CallLog.Calls.REJECTED_TYPE -> "rejected"
             CallLog.Calls.BLOCKED_TYPE -> "blocked"
             else -> "unknown"
+        }
+    }
+
+    private fun normalizePhoneNumber(number: String): String {
+        val digits = number.filter { it.isDigit() }
+        return if (digits.startsWith("91") && digits.length == 12) {
+            digits.drop(2)
+        } else {
+            digits
         }
     }
 }

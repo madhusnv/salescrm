@@ -4,6 +4,16 @@ defmodule BackendWeb.UserSessionController do
   alias Backend.Accounts
   alias BackendWeb.UserAuth
 
+  plug BackendWeb.Plugs.RateLimit,
+       [
+         limit: 5,
+         window_ms: 60_000,
+         key_prefix: "browser_login",
+         format: :html,
+         redirect_to: "/users/log-in"
+       ]
+       when action == :create
+
   def create(conn, %{"_action" => "confirmed"} = params) do
     create(conn, params, "User confirmed successfully.")
   end

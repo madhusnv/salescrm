@@ -4,20 +4,20 @@ defmodule BackendWeb.ImportJobLive do
   on_mount({BackendWeb.UserAuth, :require_authenticated})
   on_mount({BackendWeb.RequirePermissionOnMount, "lead.import"})
 
-  alias Backend.Access
+  alias Backend.Access.Policy
   alias Backend.Accounts
   alias Backend.Imports
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     job = Imports.get_import_job!(id)
-    user = socket.assigns.current_scope.user
+    scope = socket.assigns.current_scope
     invalid_rows = Imports.list_invalid_rows(job.id, 50)
     assignment_failures = Imports.list_assignment_failures(job.id, 50)
     unassigned_rows = Imports.list_unassigned_rows(job.id, 50)
     unassigned_count = Imports.count_unassigned_rows(job.id)
     counselors = Accounts.list_counselors(job.organization_id, job.branch_id)
-    can_assign = Access.role_has_permission?(user, "lead.assign")
+    can_assign = Policy.can_assign_leads?(scope)
 
     {:ok,
      assign(socket,

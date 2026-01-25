@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.koncrm.counselor.auth.SessionTokens
+import com.koncrm.counselor.ui.CallStatsScreen
 import com.koncrm.counselor.ui.DashboardScreen
 import com.koncrm.counselor.ui.LeadHomeScreen
 import com.koncrm.counselor.ui.SettingsScreen
@@ -62,65 +63,78 @@ fun MainNavigation(
 ) {
     val colors = MaterialTheme.colorScheme
     var selectedItem by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
+    var showCallStats by remember { mutableStateOf(false) }
     val items = listOf(BottomNavItem.Dashboard, BottomNavItem.Leads, BottomNavItem.Settings)
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = colors.surface,
-                tonalElevation = 8.dp
-            ) {
-                items.forEach { item ->
-                    val selected = selectedItem.route == item.route
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                contentDescription = item.title
+            if (!showCallStats) {
+                NavigationBar(
+                    containerColor = colors.surface,
+                    tonalElevation = 8.dp
+                ) {
+                    items.forEach { item ->
+                        val selected = selectedItem.route == item.route
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                                    contentDescription = item.title
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            selected = selected,
+                            onClick = { selectedItem = item },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = colors.primary,
+                                selectedTextColor = colors.primary,
+                                indicatorColor = colors.primaryContainer,
+                                unselectedIconColor = colors.onSurface.copy(alpha = 0.6f),
+                                unselectedTextColor = colors.onSurface.copy(alpha = 0.6f)
                             )
-                        },
-                        label = {
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        selected = selected,
-                        onClick = { selectedItem = item },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colors.primary,
-                            selectedTextColor = colors.primary,
-                            indicatorColor = colors.primaryContainer,
-                            unselectedIconColor = colors.onSurface.copy(alpha = 0.6f),
-                            unselectedTextColor = colors.onSurface.copy(alpha = 0.6f)
                         )
-                    )
+                    }
                 }
             }
         }
     ) { paddingValues ->
-        when (selectedItem) {
-            BottomNavItem.Dashboard -> {
-                DashboardScreen(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            BottomNavItem.Leads -> {
-                LeadHomeScreen(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            BottomNavItem.Settings -> {
-                SettingsScreen(
-                    onLogout = onLogout,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
+        if (showCallStats) {
+            CallStatsScreen(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                onBack = { showCallStats = false }
+            )
+        } else {
+            when (selectedItem) {
+                BottomNavItem.Dashboard -> {
+                    DashboardScreen(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        onOpenCallStats = { showCallStats = true }
+                    )
+                }
+                BottomNavItem.Leads -> {
+                    LeadHomeScreen(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    )
+                }
+                BottomNavItem.Settings -> {
+                    SettingsScreen(
+                        onLogout = onLogout,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    )
+                }
             }
         }
     }

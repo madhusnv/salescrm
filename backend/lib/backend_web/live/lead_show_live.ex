@@ -1,13 +1,13 @@
 defmodule BackendWeb.LeadShowLive do
   use BackendWeb, :live_view
 
-  alias Backend.Access
+  alias Backend.Access.{Permissions, Policy}
   alias Backend.Leads
   alias Backend.Leads.{Lead, LeadFollowup}
   alias Backend.Recordings
   alias Backend.Repo
 
-  on_mount({BackendWeb.RequirePermissionOnMount, "lead.read"})
+  on_mount({BackendWeb.RequirePermissionOnMount, Policy.lead_read_permissions()})
 
   @impl true
   def mount(_params, _session, socket) do
@@ -185,13 +185,13 @@ defmodule BackendWeb.LeadShowLive do
   end
 
   defp can_update?(socket) do
-    user = socket.assigns.current_scope.user
-    Access.role_has_permission?(user, "lead.update")
+    scope = socket.assigns.current_scope
+    Policy.can?(scope, Permissions.leads_update())
   end
 
   defp can_read_recordings?(socket) do
-    user = socket.assigns.current_scope.user
-    Access.role_has_permission?(user, "recording.read")
+    scope = socket.assigns.current_scope
+    Policy.can_access_recordings?(scope)
   end
 
   @impl true
@@ -421,12 +421,13 @@ defmodule BackendWeb.LeadShowLive do
   defp format_datetime(nil), do: nil
 
   defp format_datetime(%DateTime{} = datetime) do
-    formatted = Calendar.strftime(datetime, "%d %b %Y, %I:%M %p")
+    datetime
+    |> to_ist()
+    |> Calendar.strftime("%d %b %Y, %I:%M %p")
+  end
 
-    case DateTime.shift_zone(datetime, "Asia/Kolkata") do
-      {:ok, shifted} -> Calendar.strftime(shifted, "%d %b %Y, %I:%M %p")
-      {:error, _} -> formatted
-    end
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
   end
 
   defp humanize_activity(type) do

@@ -4,7 +4,7 @@ defmodule BackendWeb.LeadDedupeLive do
   alias Backend.Leads
   alias Backend.Leads.LeadDedupeCandidate
 
-  on_mount {BackendWeb.RequirePermissionOnMount, "lead.update"}
+  on_mount({BackendWeb.RequirePermissionOnMount, Backend.Access.Permissions.leads_update()})
 
   @page_size 20
 
@@ -184,8 +184,12 @@ defmodule BackendWeb.LeadDedupeLive do
 
   defp format_datetime(%DateTime{} = datetime) do
     datetime
-    |> DateTime.shift_zone!("Asia/Kolkata")
+    |> to_ist()
     |> Calendar.strftime("%d %b %Y, %I:%M %p")
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
   end
 
   @impl true

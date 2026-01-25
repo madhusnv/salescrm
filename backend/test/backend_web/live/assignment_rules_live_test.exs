@@ -4,6 +4,7 @@ defmodule BackendWeb.AssignmentRulesLiveTest do
   import Phoenix.LiveViewTest
 
   alias Backend.Accounts
+  alias Backend.Access
   alias Backend.Access.Role
   alias Backend.Organizations.{Branch, Organization, University}
   alias Backend.Repo
@@ -26,6 +27,9 @@ defmodule BackendWeb.AssignmentRulesLiveTest do
         name: "Super Admin",
         is_system: true
       })
+
+    Access.seed_permissions!()
+    Access.assign_default_permissions!(role)
 
     {:ok, admin} =
       Accounts.register_user(%{

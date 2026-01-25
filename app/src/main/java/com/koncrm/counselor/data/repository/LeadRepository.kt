@@ -8,6 +8,7 @@ import com.koncrm.counselor.leads.LeadSummary
 import com.koncrm.counselor.leads.LeadDetail
 import com.koncrm.counselor.network.LeadApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 
 /**
@@ -23,6 +24,9 @@ class LeadRepository(context: Context) {
     // --- Observable data from local database ---
 
     fun observeLeads(): Flow<List<LeadEntity>> = leadDao.getAllLeads()
+
+    fun observeLeadSummaries(): Flow<List<LeadSummary>> =
+        leadDao.getAllLeads().map { leads -> leads.map { it.toSummary() } }
 
     fun searchLeads(query: String): Flow<List<LeadEntity>> = leadDao.searchLeads(query)
 
@@ -47,9 +51,8 @@ class LeadRepository(context: Context) {
 
             result.fold(
                 onSuccess = { leads ->
-                    val entities = leads.map { it.toEntity() }
-                    leadDao.insertLeads(entities)
-                    Result.success(entities.size)
+                    cacheLeads(leads)
+                    Result.success(leads.size)
                 },
                 onFailure = { error ->
                     Result.failure(error)
@@ -58,6 +61,11 @@ class LeadRepository(context: Context) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun cacheLeads(leads: List<LeadSummary>) {
+        if (leads.isEmpty()) return
+        leadDao.insertLeads(leads.map { it.toEntity() })
     }
 
     /**
@@ -176,6 +184,17 @@ class LeadRepository(context: Context) {
             branchId = null,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    private fun LeadEntity.toSummary(): LeadSummary {
+        return LeadSummary(
+            id = id,
+            studentName = studentName,
+            phoneNumber = phoneNumber,
+            status = status,
+            universityName = universityName,
+            counselorName = counselorName
         )
     }
 

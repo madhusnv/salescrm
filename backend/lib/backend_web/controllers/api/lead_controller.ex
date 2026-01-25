@@ -1,16 +1,20 @@
 defmodule BackendWeb.Api.LeadController do
   use BackendWeb, :controller
 
-  plug(BackendWeb.Plugs.RequirePermission, "lead.read" when action in [:index, :show])
+  plug(
+    BackendWeb.Plugs.RequirePermission,
+    Backend.Access.Policy.lead_read_permissions()
+    when action in [:index, :show]
+  )
 
   plug(
     BackendWeb.Plugs.RequirePermission,
-    "lead.update"
+    Backend.Access.Permissions.leads_update()
     when action in [:create, :update_status, :add_note, :schedule_followup]
   )
 
   alias Backend.Accounts.Scope
-  alias Backend.Access
+  alias Backend.Access.Policy
   alias Backend.Calls
   alias Backend.Leads
   alias Backend.Organizations
@@ -61,7 +65,7 @@ defmodule BackendWeb.Api.LeadController do
     lead = Leads.get_lead!(scope, id)
 
     recordings =
-      if Access.role_has_permission?(scope.user, "recording.read") do
+      if Policy.can_access_recordings?(scope) do
         Recordings.list_recordings_for_lead(scope, lead.id)
       else
         []
@@ -258,5 +262,14 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   defp format_datetime(nil), do: nil
-  defp format_datetime(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp format_datetime(%DateTime{} = datetime) do
+    datetime
+    |> to_ist()
+    |> DateTime.to_iso8601()
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
+  end
 end

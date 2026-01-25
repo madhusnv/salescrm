@@ -1,7 +1,7 @@
 defmodule BackendWeb.Api.UniversityController do
   use BackendWeb, :controller
 
-  plug(BackendWeb.Plugs.RequirePermission, "lead.read")
+  plug(BackendWeb.Plugs.RequirePermission, Backend.Access.Policy.lead_read_permissions())
 
   alias Backend.Accounts.Scope
   alias Backend.Organizations

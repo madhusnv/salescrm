@@ -2,7 +2,7 @@ defmodule Backend.Leads.Lead do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(new follow_up applied not_interested)a
+  @statuses ~w(new contacted follow_up applied not_interested)a
 
   schema "leads" do
     field(:student_name, :string)

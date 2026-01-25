@@ -33,6 +33,7 @@ import java.time.format.DateTimeFormatter
 
 private val GradientStart = Color(0xFF6366F1)
 private val GradientEnd = Color(0xFF8B5CF6)
+private val IST_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 
 @Composable
 fun LeadDetailCard(
@@ -99,7 +100,7 @@ fun LeadDetailCard(
                         fontWeight = FontWeight.Bold,
                         color = colors.onSurface
                     )
-                    
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -133,7 +134,7 @@ fun LeadDetailCard(
                                 )
                             }
                         }
-                        
+
                         StatusPill(status = detail.lead.status)
                     }
                 }
@@ -224,7 +225,7 @@ private fun StatChip(
     modifier: Modifier = Modifier
 ) {
     val displayValue = if (value.isBlank() || value == "null") "—" else value
-    
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
@@ -256,6 +257,7 @@ private fun StatusButtonRow(
 ) {
     val statuses = listOf(
         "new" to "New",
+        "contacted" to "Contacted",
         "follow_up" to "Follow up",
         "applied" to "Applied",
         "not_interested" to "Not interested"
@@ -268,13 +270,13 @@ private fun StatusButtonRow(
         items(statuses.size) { index ->
             val (status, label) = statuses[index]
             val isSelected = status == currentStatus
-            
+
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = if (isSelected) GradientStart else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 shadowElevation = if (isSelected) 4.dp else 0.dp,
-                modifier = Modifier.clickable(enabled = !isSelected && !isUpdating) { 
-                    onUpdateStatus(status) 
+                modifier = Modifier.clickable(enabled = !isSelected && !isUpdating) {
+                    onUpdateStatus(status)
                 }
             ) {
                 Text(
@@ -354,7 +356,7 @@ private fun NoteInput(
             minLines = 3,
             maxLines = 5
         )
-        
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -595,7 +597,7 @@ private fun CallLogItem(call: CallLogEntry) {
         "missed" -> Color(0xFFEF4444)
         else -> MaterialTheme.colorScheme.onSurface
     }
-    
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -715,7 +717,7 @@ private fun formatRelativeTime(isoString: String?): String? {
     if (isoString.isNullOrBlank() || isoString == "null") return null
     return try {
         val instant = Instant.parse(isoString)
-        val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(ZoneId.systemDefault())
+        val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(IST_ZONE)
         formatter.format(instant)
     } catch (e: Exception) {
         null
@@ -725,7 +727,7 @@ private fun formatRelativeTime(isoString: String?): String? {
 private fun formatEpochMillis(millis: Long?): String? {
     if (millis == null || millis == 0L) return null
     val instant = Instant.ofEpochMilli(millis)
-    val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(ZoneId.systemDefault())
+    val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(IST_ZONE)
     return formatter.format(instant)
 }
 
@@ -735,7 +737,7 @@ fun pickFollowupDateTime(
     onSelected: (Long) -> Unit
 ) {
     val now = Instant.ofEpochMilli(currentMillis ?: System.currentTimeMillis())
-        .atZone(ZoneId.systemDefault())
+        .atZone(IST_ZONE)
 
     DatePickerDialog(
         context,
@@ -744,7 +746,7 @@ fun pickFollowupDateTime(
                 context,
                 { _, hour, minute ->
                     val dateTime = LocalDateTime.of(year, month + 1, day, hour, minute)
-                    val millis = dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val millis = dateTime.atZone(IST_ZONE).toInstant().toEpochMilli()
                     onSelected(millis)
                 },
                 now.hour,

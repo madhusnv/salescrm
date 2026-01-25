@@ -1,8 +1,17 @@
 defmodule BackendWeb.Api.CallLogController do
   use BackendWeb, :controller
 
-  plug(BackendWeb.Plugs.RequirePermission, "call.write" when action in [:create])
-  plug(BackendWeb.Plugs.RequirePermission, "call.read" when action in [:index])
+  plug(
+    BackendWeb.Plugs.RequirePermission,
+    Backend.Access.Permissions.leads_update()
+    when action in [:create]
+  )
+
+  plug(
+    BackendWeb.Plugs.RequirePermission,
+    Backend.Access.Policy.lead_read_permissions()
+    when action in [:index]
+  )
 
   alias Backend.Accounts.Scope
   alias Backend.Calls
@@ -100,14 +109,25 @@ defmodule BackendWeb.Api.CallLogController do
       id: call_log.id,
       call_type: call_log.call_type,
       phone_number: call_log.phone_number,
-      started_at: call_log.started_at && DateTime.to_iso8601(call_log.started_at),
-      ended_at: call_log.ended_at && DateTime.to_iso8601(call_log.ended_at),
+      started_at: format_datetime(call_log.started_at),
+      ended_at: format_datetime(call_log.ended_at),
       duration_seconds: call_log.duration_seconds,
       consent_granted: call_log.consent_granted,
-      consent_recorded_at:
-        call_log.consent_recorded_at && DateTime.to_iso8601(call_log.consent_recorded_at),
+      consent_recorded_at: format_datetime(call_log.consent_recorded_at),
       consent_source: call_log.consent_source
     }
+  end
+
+  defp format_datetime(nil), do: nil
+
+  defp format_datetime(%DateTime{} = datetime) do
+    datetime
+    |> to_ist()
+    |> DateTime.to_iso8601()
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
   end
 
   defp errors_on(changeset) do

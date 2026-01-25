@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -40,6 +41,7 @@ import com.koncrm.counselor.leads.LeadDetail
 import com.koncrm.counselor.leads.LeadSummary
 import com.koncrm.counselor.leads.University
 import com.koncrm.counselor.network.LeadApi
+import com.koncrm.counselor.data.repository.LeadRepository
 import com.koncrm.counselor.recordings.RecordingState
 import com.koncrm.counselor.recordings.RecordingStore
 import com.koncrm.counselor.leads.RecordingEntry
@@ -47,6 +49,8 @@ import com.koncrm.counselor.network.ApiConfig
 import com.koncrm.counselor.work.CallNoteStore
 import com.koncrm.counselor.work.CallLogSyncStats
 import com.koncrm.counselor.work.CallLogSyncStore
+import com.koncrm.counselor.network.ChannelEvent
+import com.koncrm.counselor.network.ChannelManager
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -83,6 +87,7 @@ fun LeadHomeScreen(
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val leadApi = remember { LeadApi() }
+    val leadRepository = remember { LeadRepository(context) }
     val scope = rememberCoroutineScope()
     val leadsState = remember { mutableStateOf<List<LeadSummary>>(emptyList()) }
     val selectedLead = remember { mutableStateOf<LeadDetail?>(null) }
@@ -93,6 +98,7 @@ fun LeadHomeScreen(
     val hasMoreLeads = remember { mutableStateOf(true) }
     val searchQuery = remember { mutableStateOf("") }
     val statusFilter = remember { mutableStateOf("") }
+    val useCache = remember { mutableStateOf(false) }
     val statusMessage = remember { mutableStateOf<String?>(null) }
     val error = remember { mutableStateOf<String?>(null) }
     val noteText = remember { mutableStateOf("") }
@@ -116,10 +122,28 @@ fun LeadHomeScreen(
         .collectAsState(initial = CallLogSyncStats(null, 0, 0, 0))
     val recordingState by recordingStore.stateFlow()
         .collectAsState(initial = RecordingState(false, "idle", null, null))
+    val cachedLeads by leadRepository.observeLeadSummaries()
+        .collectAsState(initial = emptyList())
     val callLogsState = remember { mutableStateOf<List<com.koncrm.counselor.leads.CallLogEntry>>(emptyList()) }
     val callLogPage = remember { mutableStateOf(1) }
     val hasMoreCallLogs = remember { mutableStateOf(true) }
     val callLogFilter = remember { mutableStateOf("") }
+    val channelManager = remember { ChannelManager.getInstance(context) }
+    val displayLeads = if (useCache.value) {
+        val search = searchQuery.value.trim()
+        val status = statusFilter.value.trim()
+        cachedLeads.filter { lead ->
+            val matchesStatus = status.isBlank() || lead.status.equals(status, ignoreCase = true)
+            val matchesSearch = search.isBlank() ||
+                lead.studentName.contains(search, ignoreCase = true) ||
+                lead.phoneNumber.contains(search) ||
+                (lead.universityName?.contains(search, ignoreCase = true) ?: false)
+            matchesStatus && matchesSearch
+        }
+    } else {
+        leadsState.value
+    }
+    val displayLeadsState = rememberUpdatedState(displayLeads)
 
     LaunchedEffect(Unit) {
         isLoading.value = true
@@ -133,12 +157,14 @@ fun LeadHomeScreen(
         }
         loadLeads(
             api = leadApi,
+            leadRepository = leadRepository,
             reset = true,
             leadsState = leadsState,
             leadPage = leadPage,
             hasMore = hasMoreLeads,
             isLoading = isLoading,
             error = error,
+            useCache = useCache,
             pageSize = pageSize,
             statusFilter = statusFilter.value,
             searchQuery = searchQuery.value
@@ -146,11 +172,38 @@ fun LeadHomeScreen(
     }
 
     LaunchedEffect(Unit) {
+        channelManager.events.collect { event ->
+            when (event) {
+                is ChannelEvent.LeadUpdated -> {
+                    val status = event.status.trim()
+                    if (status.isNotEmpty()) {
+                        val current = leadsState.value
+                        val updatedLead = current.firstOrNull { it.id == event.id }?.copy(status = status)
+                        if (updatedLead != null) {
+                            leadsState.value = current.map { lead ->
+                                if (lead.id == updatedLead.id) updatedLead else lead
+                            }
+                            leadRepository.cacheLeads(listOf(updatedLead))
+                        }
+                        val detail = selectedLead.value
+                        if (detail != null && detail.lead.id == event.id) {
+                            selectedLead.value = detail.copy(
+                                lead = detail.lead.copy(status = status)
+                            )
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
         callNoteStore.pendingFlow().collect { pending ->
             pending?.let {
                 val phone = normalizePhone(it.phoneNumber)
                 if (phone.isNotBlank() && pendingCallNote.value == null) {
-                    val match = findLeadByPhone(leadsState.value, phone)
+                    val match = findLeadByPhone(displayLeadsState.value, phone)
                     pendingCallNote.value =
                         PendingCallNote(phoneNumber = phone, lead = match, endedAtMillis = it.endedAtMillis)
                     pendingCallText.value = ""
@@ -207,12 +260,14 @@ fun LeadHomeScreen(
                         isLoading.value = true
                         loadLeads(
                             api = leadApi,
+                            leadRepository = leadRepository,
                             reset = true,
                             leadsState = leadsState,
                             leadPage = leadPage,
                             hasMore = hasMoreLeads,
                             isLoading = isLoading,
                             error = error,
+                            useCache = useCache,
                             pageSize = pageSize,
                             statusFilter = statusFilter.value,
                             searchQuery = searchQuery.value
@@ -244,7 +299,7 @@ fun LeadHomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth().weight(1f)
             ) {
-                items(leadsState.value) { lead ->
+                items(displayLeads) { lead ->
                     LeadCard(lead = lead) {
                         selectedLead.value = null
                         noteText.value = ""
@@ -269,7 +324,7 @@ fun LeadHomeScreen(
                 }
             }
 
-            if (hasMoreLeads.value && !isLoadingMore.value && leadsState.value.isNotEmpty()) {
+            if (hasMoreLeads.value && !isLoadingMore.value && displayLeads.isNotEmpty() && !useCache.value) {
                 Text(
                     text = "Load more leads",
                     style = MaterialTheme.typography.bodyMedium,
@@ -293,6 +348,7 @@ fun LeadHomeScreen(
                                     } else {
                                         leadsState.value = leadsState.value + newLeads
                                         leadPage.value = nextPage
+                                        leadRepository.cacheLeads(newLeads)
                                     }
                                 }.onFailure {
                                     error.value = "Unable to load more leads."
@@ -483,6 +539,7 @@ fun LeadHomeScreen(
                         val result = leadApi.createLead(name, phone, pendingUniversityId.value)
                         result.onSuccess { newLead ->
                             leadsState.value = listOf(newLead) + leadsState.value
+                            leadRepository.cacheLeads(listOf(newLead))
                             pendingCallNote.value = pending.copy(lead = newLead)
                             pendingLeadName.value = ""
                             statusMessage.value = "Lead created. Add your note."
@@ -495,6 +552,8 @@ fun LeadHomeScreen(
         }
     }
 }
+
+private val IST_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 
 @Composable
 private fun LeadCard(
@@ -577,8 +636,15 @@ private fun LeadFilters(
     onApply: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    val statuses = listOf("" to "All", "new" to "New", "follow_up" to "Follow-up", "applied" to "Applied", "not_interested" to "Not interested")
-    
+    val statuses = listOf(
+        "" to "All",
+        "new" to "New",
+        "contacted" to "Contacted",
+        "follow_up" to "Follow-up",
+        "applied" to "Applied",
+        "not_interested" to "Not interested"
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
     ) {
@@ -598,9 +664,9 @@ private fun LeadFilters(
              ),
              singleLine = true
          )
-         
+
          Spacer(modifier = Modifier.height(12.dp))
-         
+
          Row(
              modifier = Modifier
                  .fillMaxWidth()
@@ -612,7 +678,7 @@ private fun LeadFilters(
                  val bgColor = if (isSelected) colors.primary else colors.surface
                  val contentColor = if (isSelected) colors.onPrimary else colors.onSurface.copy(alpha=0.7f)
                  val borderColor = if (isSelected) Color.Transparent else colors.outline.copy(alpha=0.3f)
-                 
+
                  Box(
                      modifier = Modifier
                          .clip(RoundedCornerShape(50))
@@ -622,15 +688,15 @@ private fun LeadFilters(
                          .padding(horizontal = 16.dp, vertical = 8.dp)
                  ) {
                      Text(
-                         text = label, 
-                         style = MaterialTheme.typography.labelMedium, 
+                         text = label,
+                         style = MaterialTheme.typography.labelMedium,
                          color = contentColor,
                          fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                      )
                  }
              }
          }
-         
+
          Text(
              text = "Apply filters",
              style = MaterialTheme.typography.labelLarge,
@@ -807,9 +873,15 @@ private fun LeadDetailCard(
 
 @Composable
 private fun StatusRow(currentStatus: String, onUpdateStatus: (String) -> Unit) {
-    val statuses = listOf("new" to "New", "follow_up" to "Follow up", "applied" to "Applied", "not_interested" to "Not interested")
+    val statuses = listOf(
+        "new" to "New",
+        "contacted" to "Contacted",
+        "follow_up" to "Follow up",
+        "applied" to "Applied",
+        "not_interested" to "Not interested"
+    )
     val colors = MaterialTheme.colorScheme
-    
+
     LazyRow(
         modifier = Modifier.padding(top = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -819,7 +891,7 @@ private fun StatusRow(currentStatus: String, onUpdateStatus: (String) -> Unit) {
             val isSelected = status == currentStatus
             val bgColor = if (isSelected) colors.primary else colors.surfaceVariant.copy(alpha = 0.6f)
             val textColor = if (isSelected) colors.onPrimary else colors.onSurface.copy(alpha = 0.8f)
-            
+
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = bgColor,
@@ -1121,7 +1193,7 @@ private fun StatsRow(
                  }
              }
          }
-         
+
          // Recording Card
          Card(
              modifier = Modifier.weight(1f),
@@ -1131,21 +1203,21 @@ private fun StatsRow(
          ) {
              Column(modifier = Modifier.padding(12.dp)) {
                  Row(
-                     verticalAlignment = Alignment.CenterVertically, 
-                     horizontalArrangement = Arrangement.SpaceBetween, 
+                     verticalAlignment = Alignment.CenterVertically,
+                     horizontalArrangement = Arrangement.SpaceBetween,
                      modifier = Modifier.fillMaxWidth()
                  ) {
                      Text("Rec", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                      Switch(
-                         checked = recordingState.consentGranted, 
-                         onCheckedChange = onConsentChange, 
+                         checked = recordingState.consentGranted,
+                         onCheckedChange = onConsentChange,
                          modifier = Modifier.scale(0.7f).height(30.dp)
                      )
                  }
                  Spacer(modifier = Modifier.height(4.dp))
                  Text(
-                    if(recordingState.lastStatus == "recording") "Live 🔴" else "Active", 
-                    style = MaterialTheme.typography.titleMedium, 
+                    if(recordingState.lastStatus == "recording") "Live 🔴" else "Active",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if(recordingState.lastStatus == "recording") Color.Red else MaterialTheme.colorScheme.onSurface
                  )
@@ -1315,12 +1387,13 @@ private fun StatusPill(label: String) {
     val colors = MaterialTheme.colorScheme
     val (bgColor, textColor) = when (label.lowercase()) {
         "new" -> colors.primaryContainer to colors.onPrimaryContainer
+        "contacted" -> Color(0xFFE0F2F1) to Color(0xFF0F766E) // Teal
         "follow_up" -> Color(0xFFFFF4DE) to Color(0xFFD97706) // Amber
         "applied" -> Color(0xFFDCFCE7) to Color(0xFF15803D) // Green
         "not_interested" -> Color(0xFFFEE2E2) to Color(0xFFB91C1C) // Red
         else -> colors.surfaceVariant to colors.onSurfaceVariant
     }
-    
+
     Box(
         modifier = Modifier
             .background(bgColor, RoundedCornerShape(50)) // Pill shape
@@ -1396,7 +1469,7 @@ private fun resolveRecordingUrl(url: String): String {
 private fun formatEpoch(epochMillis: Long?): String {
     if (epochMillis == null || epochMillis == 0L) return "--"
     val instant = Instant.ofEpochMilli(epochMillis)
-    val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(ZoneId.systemDefault())
+    val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(IST_ZONE)
     return formatter.format(instant)
 }
 
@@ -1404,7 +1477,7 @@ private fun formatIso(iso: String?): String? {
     if (iso.isNullOrBlank()) return null
     return runCatching {
         val instant = Instant.parse(iso)
-        val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(ZoneId.systemDefault())
+        val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(IST_ZONE)
         formatter.format(instant)
     }.getOrNull()
 }
@@ -1417,12 +1490,14 @@ private data class PendingCallNote(
 
 private suspend fun loadLeads(
     api: LeadApi,
+    leadRepository: LeadRepository,
     reset: Boolean,
     leadsState: androidx.compose.runtime.MutableState<List<LeadSummary>>,
     leadPage: androidx.compose.runtime.MutableState<Int>,
     hasMore: androidx.compose.runtime.MutableState<Boolean>,
     isLoading: androidx.compose.runtime.MutableState<Boolean>,
     error: androidx.compose.runtime.MutableState<String?>,
+    useCache: androidx.compose.runtime.MutableState<Boolean>,
     pageSize: Int,
     statusFilter: String,
     searchQuery: String
@@ -1437,8 +1512,12 @@ private suspend fun loadLeads(
         if (leads.size < pageSize) {
             hasMore.value = false
         }
+        useCache.value = false
+        leadRepository.cacheLeads(leads)
     }.onFailure {
-        error.value = "Unable to load leads."
+        error.value = "Unable to load leads. Showing cached data."
+        useCache.value = true
+        hasMore.value = false
     }
     isLoading.value = false
 }
@@ -1449,7 +1528,7 @@ private fun pickFollowupDateTime(
     onSelected: (Long) -> Unit
 ) {
     val now = Instant.ofEpochMilli(currentMillis ?: System.currentTimeMillis())
-        .atZone(ZoneId.systemDefault())
+        .atZone(IST_ZONE)
     val date = LocalDate.of(now.year, now.month, now.dayOfMonth)
     val time = LocalTime.of(now.hour, now.minute)
 
@@ -1462,7 +1541,7 @@ private fun pickFollowupDateTime(
                 { _, hour, minute ->
                     val pickedTime = LocalTime.of(hour, minute)
                     val dateTime = LocalDateTime.of(pickedDate, pickedTime)
-                    val millis = dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val millis = dateTime.atZone(IST_ZONE).toInstant().toEpochMilli()
                     onSelected(millis)
                 },
                 time.hour,

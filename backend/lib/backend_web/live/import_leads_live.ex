@@ -9,7 +9,8 @@ defmodule BackendWeb.ImportLeadsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    user = socket.assigns.current_scope.user
+    scope = socket.assigns.current_scope
+    user = scope.user
 
     filters = %{"status" => "", "from" => "", "to" => "", "search" => ""}
     page = 1
@@ -18,6 +19,9 @@ defmodule BackendWeb.ImportLeadsLive do
     socket =
       socket
       |> assign(:universities, Organizations.list_universities(user.organization_id))
+      |> assign(:branches, Organizations.list_branches(user.organization_id))
+      |> assign(:selected_branch_id, user.branch_id)
+      |> assign(:can_select_branch, scope.is_super_admin)
       |> assign(:selected_university_id, nil)
       |> assign(:import_job_id, nil)
       |> assign(:filters, filters)
@@ -94,6 +98,18 @@ defmodule BackendWeb.ImportLeadsLive do
                   value={@selected_university_id}
                   options={Enum.map(@universities, &{&1.name, &1.id})}
                   prompt="Select university"
+                  required
+                />
+
+                <.input
+                  :if={@can_select_branch}
+                  name="branch_id"
+                  id="lead_import_branch"
+                  type="select"
+                  label="Branch"
+                  value={@selected_branch_id}
+                  options={Enum.map(@branches, &{&1.name, &1.id})}
+                  prompt="Select branch"
                   required
                 />
 
@@ -264,19 +280,33 @@ defmodule BackendWeb.ImportLeadsLive do
 
   @impl true
   def handle_event("validate", params, socket) do
-    university_id = Map.get(params, "university_id")
-    {:noreply, assign(socket, :selected_university_id, university_id)}
+    university_id =
+      params
+      |> Map.get("university_id", socket.assigns.selected_university_id)
+      |> normalize_select_id()
+
+    branch_id =
+      params
+      |> Map.get("branch_id", socket.assigns.selected_branch_id)
+      |> normalize_select_id()
+
+    {:noreply,
+     socket
+     |> assign(:selected_university_id, university_id)
+     |> assign(:selected_branch_id, branch_id)}
   end
 
-  def handle_event("import", %{"university_id" => university_id}, socket) do
-    user = socket.assigns.current_scope.user
+  def handle_event("import", %{"university_id" => university_id} = params, socket) do
+    scope = socket.assigns.current_scope
+    user = scope.user
+    branch_id = resolve_branch_id(params, scope)
 
     case consume_uploaded_entries(socket, :csv, fn %{path: path}, entry ->
            csv_content = File.read!(path)
 
            attrs = %{
              organization_id: user.organization_id,
-             branch_id: user.branch_id,
+             branch_id: branch_id,
              university_id: String.to_integer(university_id),
              created_by_user_id: user.id,
              original_filename: entry.client_name
@@ -371,6 +401,27 @@ defmodule BackendWeb.ImportLeadsLive do
     params = Map.merge(socket.assigns.filters, %{"page" => to_string(page)})
     {:noreply, push_patch(socket, to: ~p"/imports/leads?#{params}")}
   end
+
+  defp resolve_branch_id(params, scope) do
+    branch_id = Map.get(params, "branch_id")
+
+    cond do
+      scope.is_super_admin and is_binary(branch_id) and branch_id != "" ->
+        String.to_integer(branch_id)
+
+      true ->
+        scope.branch_id
+    end
+  end
+
+  defp normalize_select_id(nil), do: nil
+  defp normalize_select_id(""), do: nil
+
+  defp normalize_select_id(value) when is_binary(value) do
+    String.to_integer(value)
+  end
+
+  defp normalize_select_id(value), do: value
 
   @impl true
   def handle_info(:refresh_jobs, socket) do

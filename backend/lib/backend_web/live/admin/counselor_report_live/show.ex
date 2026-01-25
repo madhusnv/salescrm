@@ -21,6 +21,7 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
       counselor ->
         leads = Reports.list_counselor_leads(scope, counselor.id)
         leads_with_calls = load_calls_for_leads(leads)
+        daily_durations = Reports.list_counselor_daily_call_durations(counselor.id, date_range)
 
         {:ok,
          socket
@@ -29,6 +30,7 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
          |> assign(:leads, leads_with_calls)
          |> assign(:search, "")
          |> assign(:date_filter, filter)
+         |> assign(:daily_durations, daily_durations)
          |> assign(:playing_recording, nil)}
     end
   end
@@ -135,6 +137,31 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
           </div>
         </div>
 
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-slate-900">Daily Call Duration</h2>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+              {@date_filter}
+            </p>
+          </div>
+          <div :if={@daily_durations == []} class="mt-4 text-sm text-slate-500">
+            No calls recorded
+          </div>
+          <div :if={@daily_durations != []} class="mt-4 space-y-2">
+            <div
+              :for={row <- @daily_durations}
+              class="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-2"
+            >
+              <span class="text-sm text-slate-700">
+                {Calendar.strftime(row.date, "%b %d, %Y")}
+              </span>
+              <span class="text-sm font-semibold text-slate-900">
+                {format_duration(row.total_duration)}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <%= if @playing_recording do %>
           <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex items-center justify-between">
@@ -193,6 +220,7 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
                 <span class={[
                   "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
                   lead.status == :new && "bg-blue-100 text-blue-700",
+                  lead.status == :contacted && "bg-teal-100 text-teal-700",
                   lead.status == :follow_up && "bg-amber-100 text-amber-700",
                   lead.status == :applied && "bg-emerald-100 text-emerald-700",
                   lead.status == :not_interested && "bg-slate-100 text-slate-600"
@@ -234,7 +262,7 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
                           {String.capitalize(to_string(call.call_type))}
                         </p>
                         <p class="text-xs text-slate-500">
-                          {Calendar.strftime(call.started_at, "%b %d, %Y at %I:%M %p")}
+                          {format_datetime_ist(call.started_at)}
                         </p>
                       </div>
                     </div>
@@ -308,4 +336,16 @@ defmodule BackendWeb.Admin.CounselorReportLive.Show do
   defp call_icon(:rejected), do: "hero-phone-x-mark"
   defp call_icon(:blocked), do: "hero-no-symbol"
   defp call_icon(_), do: "hero-phone"
+
+  defp format_datetime_ist(nil), do: "—"
+
+  defp format_datetime_ist(%DateTime{} = datetime) do
+    datetime
+    |> to_ist()
+    |> Calendar.strftime("%b %d, %Y at %I:%M %p")
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
+  end
 end

@@ -11,8 +11,9 @@
 # and so on) as they will fail if something goes wrong.
 
 alias Backend.Repo
+alias Backend.Access
 alias Backend.Accounts
-alias Backend.Access.{Permission, Role, RolePermission}
+alias Backend.Access.Role
 alias Backend.Organizations.{Branch, Organization, University}
 
 organization =
@@ -37,65 +38,10 @@ counselor_role = Repo.get_by!(Role, organization_id: organization.id, name: "Cou
 Repo.get_by(University, organization_id: organization.id, name: "Default University") ||
   Repo.insert!(%University{organization_id: organization.id, name: "Default University"})
 
-permission_keys = [
-  "org.manage",
-  "branch.manage",
-  "user.manage",
-  "role.manage",
-  "permission.manage",
-  "lead.import",
-  "lead.assign",
-  "lead.read",
-  "lead.update",
-  "call.read",
-  "call.write",
-  "recording.read",
-  "recording.review",
-  "analytics.read"
-]
-
-for key <- permission_keys do
-  Repo.get_by(Permission, key: key) ||
-    Repo.insert!(%Permission{key: key, description: key, category: "core"})
-end
-
-permission_map = %{
-  admin_role.id => permission_keys,
-  manager_role.id => [
-    "branch.manage",
-    "user.manage",
-    "lead.import",
-    "lead.assign",
-    "lead.read",
-    "lead.update",
-    "call.read",
-    "call.write",
-    "recording.read",
-    "recording.review",
-    "analytics.read"
-  ],
-  counselor_role.id => [
-    "lead.read",
-    "lead.update",
-    "call.read",
-    "call.write",
-    "recording.read"
-  ]
-}
-
-permissions_by_key =
-  Permission
-  |> Repo.all()
-  |> Map.new(fn permission -> {permission.key, permission.id} end)
-
-for {role_id, keys} <- permission_map do
-  for key <- keys do
-    permission_id = Map.fetch!(permissions_by_key, key)
-
-    Repo.get_by(RolePermission, role_id: role_id, permission_id: permission_id) ||
-      Repo.insert!(%RolePermission{role_id: role_id, permission_id: permission_id})
-  end
-end
+Access.seed_permissions!()
+Access.assign_default_permissions!(admin_role)
+Access.assign_default_permissions!(manager_role)
+Access.assign_default_permissions!(counselor_role)
 
 admin_email = "admin@koncrm.local"
 

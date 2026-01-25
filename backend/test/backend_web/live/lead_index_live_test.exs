@@ -5,6 +5,7 @@ defmodule BackendWeb.LeadIndexLiveTest do
 
   alias Backend.Accounts
   alias Backend.Accounts.Scope
+  alias Backend.Access
   alias Backend.Access.Role
   alias Backend.Leads
   alias Backend.Organizations.{Branch, Organization, University}
@@ -71,6 +72,10 @@ defmodule BackendWeb.LeadIndexLiveTest do
 
     counselor_role =
       Repo.insert!(%Role{organization_id: organization.id, name: "Counselor", is_system: true})
+
+    Access.seed_permissions!()
+    Access.assign_default_permissions!(admin_role)
+    Access.assign_default_permissions!(counselor_role)
 
     {:ok, admin} =
       Accounts.register_user(%{

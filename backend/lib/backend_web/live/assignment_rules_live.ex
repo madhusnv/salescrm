@@ -2,7 +2,7 @@ defmodule BackendWeb.AssignmentRulesLive do
   use BackendWeb, :live_view
 
   on_mount({BackendWeb.UserAuth, :require_authenticated})
-  on_mount({BackendWeb.RequirePermissionOnMount, "lead.assign"})
+  on_mount({BackendWeb.RequirePermissionOnMount, Backend.Access.Permissions.leads_assign()})
 
   alias Backend.Accounts
   alias Backend.Assignments

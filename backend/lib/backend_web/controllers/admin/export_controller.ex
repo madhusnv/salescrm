@@ -77,8 +77,23 @@ defmodule BackendWeb.Admin.ExportController do
   defp sanitize_csv_value(value), do: value
 
   defp format_datetime(nil), do: ""
-  defp format_datetime(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S")
-  defp format_datetime(%NaiveDateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S")
+
+  defp format_datetime(%DateTime{} = dt) do
+    dt
+    |> to_ist()
+    |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
+  end
+
+  defp format_datetime(%NaiveDateTime{} = dt) do
+    dt
+    |> DateTime.from_naive!("Etc/UTC")
+    |> to_ist()
+    |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
+  end
 
   defp require_authenticated_user(conn, _opts) do
     if conn.assigns[:current_scope] && conn.assigns.current_scope.user do

@@ -2,6 +2,7 @@ defmodule BackendWeb.Api.RecordingControllerTest do
   use BackendWeb.ConnCase, async: true
 
   alias Backend.Accounts
+  alias Backend.Access
   alias Backend.Access.Role
   alias Backend.Leads
   alias Backend.Recordings.CallRecording
@@ -23,6 +24,9 @@ defmodule BackendWeb.Api.RecordingControllerTest do
 
     role =
       Repo.insert!(%Role{organization_id: organization.id, name: "Super Admin", is_system: true})
+
+    Access.seed_permissions!()
+    Access.assign_default_permissions!(role)
 
     {:ok, user} =
       Accounts.register_user(%{

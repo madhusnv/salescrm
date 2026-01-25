@@ -18,13 +18,17 @@ defmodule BackendWeb.Api.RecordingController do
 
   plug(
     BackendWeb.Plugs.RequirePermission,
-    "call.write" when action in [:init, :upload, :complete]
+    Backend.Access.Permissions.leads_update()
+    when action in [:init, :upload, :complete]
   )
 
-  plug(BackendWeb.Plugs.RequirePermission, "recording.read" when action in [:index])
+  plug(
+    BackendWeb.Plugs.RequirePermission,
+    Backend.Access.Permissions.recordings_playback()
+    when action in [:index]
+  )
 
   alias Backend.Accounts.Scope
-  alias Backend.Access
   alias Backend.Audit
   alias Backend.Recordings
 
@@ -247,9 +251,21 @@ defmodule BackendWeb.Api.RecordingController do
       status: recording.status,
       file_url: recording.file_url,
       duration_seconds: recording.duration_seconds,
-      recorded_at: recording.recorded_at && DateTime.to_iso8601(recording.recorded_at),
+      recorded_at: format_datetime(recording.recorded_at),
       counselor_id: recording.counselor_id
     }
+  end
+
+  defp format_datetime(nil), do: nil
+
+  defp format_datetime(%DateTime{} = datetime) do
+    datetime
+    |> to_ist()
+    |> DateTime.to_iso8601()
+  end
+
+  defp to_ist(%DateTime{} = datetime) do
+    DateTime.add(datetime, 19_800, :second)
   end
 
   defp parse_int(value, default) do
@@ -268,7 +284,7 @@ defmodule BackendWeb.Api.RecordingController do
   end
 
   defp authorize_recording(scope, recording) do
-    if recording.counselor_id == scope.user.id or Access.super_admin?(scope.user) do
+    if recording.counselor_id == scope.user.id or scope.is_super_admin do
       :ok
     else
       {:error, :forbidden}

@@ -2,7 +2,7 @@ defmodule Backend.Leads do
   import Ecto.Query, warn: false
 
   alias Backend.Accounts.Scope
-  alias Backend.Access
+  alias Backend.Access.Policy
   alias Backend.Analytics
   alias Backend.Imports.ImportRow
   alias Backend.Accounts.User
@@ -18,7 +18,7 @@ defmodule Backend.Leads do
     Lead
     |> scope_query(scope)
     |> apply_filters(filters)
-    |> order_by([l], desc: coalesce(l.last_activity_at, l.inserted_at))
+    |> order_by([l], desc: l.last_activity_at, desc: l.id)
     |> limit(^page_size)
     |> offset(^offset)
     |> preload([:assigned_counselor, :university, :branch])
@@ -47,12 +47,14 @@ defmodule Backend.Leads do
     attrs = normalize_attrs(attrs)
     normalized_phone = normalize_phone(Map.get(attrs, "phone_number"))
     normalized_name = normalize_name(Map.get(attrs, "student_name"))
+    now = DateTime.utc_now(:second)
 
     attrs =
       attrs
       |> Map.put_new("source", "manual")
       |> Map.put("normalized_phone_number", normalized_phone)
       |> Map.put("normalized_student_name", normalized_name)
+      |> Map.put_new("last_activity_at", now)
 
     result =
       %Lead{
@@ -311,13 +313,16 @@ defmodule Backend.Leads do
       if existing do
         existing
       else
+        now = DateTime.utc_now(:second)
+
         attrs = %{
           student_name: row.student_name,
           phone_number: row.phone_number,
           normalized_phone_number: row.normalized_phone_number,
           normalized_student_name: row.normalized_student_name,
           status: :new,
-          source: "import"
+          source: "import",
+          last_activity_at: now
         }
 
         lead =
@@ -338,65 +343,74 @@ defmodule Backend.Leads do
     end)
   end
 
+  @doc """
+  Assigns a lead to a counselor.
+
+  Broadcasts are sent AFTER the transaction commits to prevent phantom updates.
+  """
   def assign_lead(%Scope{} = scope, %Lead{} = lead, counselor_id) do
-    Repo.transaction(fn ->
-      counselor =
-        Repo.one(
-          from(u in User,
-            where: u.id == ^counselor_id and u.organization_id == ^scope.user.organization_id,
-            select: %{id: u.id, full_name: u.full_name}
+    result =
+      Repo.transaction(fn ->
+        counselor =
+          Repo.one(
+            from(u in User,
+              where: u.id == ^counselor_id and u.organization_id == ^scope.user.organization_id,
+              select: %{id: u.id, full_name: u.full_name}
+            )
           )
-        )
 
-      if counselor == nil do
-        Repo.rollback(:invalid_counselor)
-      end
+        if counselor == nil do
+          Repo.rollback(:invalid_counselor)
+        end
 
-      occurred_at = DateTime.utc_now(:second)
+        occurred_at = DateTime.utc_now(:second)
 
-      lead =
-        lead
-        |> Lead.changeset(%{
-          assigned_counselor_id: counselor.id,
-          last_activity_at: occurred_at
-        })
-        |> Repo.update!()
+        lead =
+          lead
+          |> Lead.changeset(%{
+            assigned_counselor_id: counselor.id,
+            last_activity_at: occurred_at
+          })
+          |> Repo.update!()
 
-      activity_attrs = %{
-        activity_type: :assignment_change,
-        body: "Assigned to #{counselor.full_name}",
-        metadata: %{counselor_id: counselor.id},
-        occurred_at: occurred_at
-      }
+        activity_attrs = %{
+          activity_type: :assignment_change,
+          body: "Assigned to #{counselor.full_name}",
+          metadata: %{counselor_id: counselor.id},
+          occurred_at: occurred_at
+        }
 
-      _activity =
-        %LeadActivity{lead_id: lead.id, user_id: scope.user.id}
-        |> LeadActivity.changeset(activity_attrs)
-        |> Repo.insert!()
+        _activity =
+          %LeadActivity{lead_id: lead.id, user_id: scope.user.id}
+          |> LeadActivity.changeset(activity_attrs)
+          |> Repo.insert!()
 
-      _ = Broadcaster.broadcast_lead_assigned(counselor_id, lead)
+        {lead, counselor_id}
+      end)
 
-      lead
-    end)
-  end
+    case result do
+      {:ok, {lead, counselor_id}} ->
+        _ = Broadcaster.broadcast_lead_assigned(counselor_id, lead)
+        {:ok, lead}
 
-  defp scope_query(query, %Scope{user: user}) do
-    query = where(query, [l], l.organization_id == ^user.organization_id)
-
-    cond do
-      Access.super_admin?(user) ->
-        query
-
-      role_name(user) == "Branch Manager" ->
-        where(query, [l], l.branch_id == ^user.branch_id)
-
-      true ->
-        where(query, [l], l.assigned_counselor_id == ^user.id)
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
-  defp role_name(user) do
-    Repo.one(from(r in Backend.Access.Role, where: r.id == ^user.role_id, select: r.name))
+  defp scope_query(query, %Scope{} = scope) do
+    query = where(query, [l], l.organization_id == ^scope.organization_id)
+
+    case Policy.lead_access_level(scope) do
+      :organization ->
+        query
+
+      :branch ->
+        where(query, [l], l.branch_id == ^scope.branch_id)
+
+      :own ->
+        where(query, [l], l.assigned_counselor_id == ^scope.user_id)
+    end
   end
 
   defp apply_filters(query, filters) do
@@ -419,26 +433,27 @@ defmodule Backend.Leads do
 
   defp maybe_filter_merged(query, _), do: where(query, [l], is_nil(l.merged_into_lead_id))
 
-  defp scope_candidate_query(query, %Scope{user: user}) do
+  defp scope_candidate_query(query, %Scope{} = scope) do
     base =
       from(c in query,
         join: l in Lead,
         on: c.lead_id == l.id
       )
 
-    cond do
-      Access.super_admin?(user) ->
-        from([c, l] in base, where: l.organization_id == ^user.organization_id)
+    case Policy.lead_access_level(scope) do
+      :organization ->
+        from([c, l] in base, where: l.organization_id == ^scope.organization_id)
 
-      role_name(user) == "Branch Manager" ->
+      :branch ->
         from([c, l] in base,
-          where: l.organization_id == ^user.organization_id and l.branch_id == ^user.branch_id
+          where: l.organization_id == ^scope.organization_id and l.branch_id == ^scope.branch_id
         )
 
-      true ->
+      :own ->
         from([c, l] in base,
           where:
-            l.organization_id == ^user.organization_id and l.assigned_counselor_id == ^user.id
+            l.organization_id == ^scope.organization_id and
+              l.assigned_counselor_id == ^scope.user_id
         )
     end
   end
@@ -584,12 +599,10 @@ defmodule Backend.Leads do
 
   def get_lead_by_phone(%Scope{} = scope, normalized_phone) when is_binary(normalized_phone) do
     Lead
-    |> scope_query(scope)
-    |> where(
-      [l],
-      l.normalized_phone_number == ^normalized_phone and is_nil(l.merged_into_lead_id)
-    )
-    |> order_by([l], desc: l.inserted_at)
+    |> where([l], l.organization_id == ^scope.organization_id)
+    |> where([l], l.normalized_phone_number == ^normalized_phone)
+    |> where([l], is_nil(l.merged_into_lead_id))
+    |> order_by([l], desc: l.last_activity_at)
     |> limit(1)
     |> Repo.one()
   end

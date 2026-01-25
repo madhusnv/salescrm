@@ -13,6 +13,7 @@ private val Context.callLogStore by preferencesDataStore(name = "call_log_sync")
 
 class CallLogSyncStore(private val context: Context) {
     private val lastSyncKey = longPreferencesKey("last_synced_at")
+    private val lastSyncedCallIdKey = longPreferencesKey("last_synced_call_id")
     private val syncedCountKey = intPreferencesKey("last_synced_count")
     private val duplicateCountKey = intPreferencesKey("last_duplicate_count")
     private val failureCountKey = intPreferencesKey("last_failure_count")
@@ -22,19 +23,33 @@ class CallLogSyncStore(private val context: Context) {
         return prefs[lastSyncKey]
     }
 
+    suspend fun getLastSyncedCallId(): Long? {
+        val prefs = context.callLogStore.data.first()
+        return prefs[lastSyncedCallIdKey]
+    }
+
     suspend fun setLastSyncedAt(epochMillis: Long) {
         context.callLogStore.edit { prefs ->
             prefs[lastSyncKey] = epochMillis
         }
     }
 
-    suspend fun setStats(synced: Int, duplicates: Int, failures: Int, lastSyncedAt: Long?) {
+    suspend fun setStats(
+        synced: Int,
+        duplicates: Int,
+        failures: Int,
+        lastSyncedAt: Long?,
+        lastSyncedCallId: Long? = null
+    ) {
         context.callLogStore.edit { prefs ->
             prefs[syncedCountKey] = synced
             prefs[duplicateCountKey] = duplicates
             prefs[failureCountKey] = failures
             if (lastSyncedAt != null) {
                 prefs[lastSyncKey] = lastSyncedAt
+            }
+            if (lastSyncedCallId != null) {
+                prefs[lastSyncedCallIdKey] = lastSyncedCallId
             }
         }
     }

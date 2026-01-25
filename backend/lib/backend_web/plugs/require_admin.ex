@@ -1,14 +1,19 @@
 defmodule BackendWeb.Plugs.RequireAdmin do
+  @moduledoc """
+  Plug that requires the user to be an admin (Super Admin or Branch Manager).
+  Uses Policy-based authorization instead of role name checks.
+  """
+
   import Plug.Conn
-  alias Backend.Access
-  alias Backend.Repo
+
+  alias Backend.Access.{Permissions, Policy}
 
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    user = conn.assigns[:current_scope] && conn.assigns.current_scope.user
+    scope = conn.assigns[:current_scope]
 
-    if user && admin_or_branch_manager?(user) do
+    if scope && admin_access?(scope) do
       conn
     else
       conn
@@ -18,12 +23,16 @@ defmodule BackendWeb.Plugs.RequireAdmin do
     end
   end
 
-  defp admin_or_branch_manager?(user) do
-    Access.super_admin?(user) || role_name(user) == "Branch Manager"
-  end
-
-  defp role_name(user) do
-    import Ecto.Query
-    Repo.one(from(r in Backend.Access.Role, where: r.id == ^user.role_id, select: r.name))
+  defp admin_access?(scope) do
+    scope.is_super_admin or
+      Enum.any?(
+        [
+          Permissions.admin_users(),
+          Permissions.admin_branches(),
+          Permissions.admin_roles(),
+          Permissions.admin_settings()
+        ],
+        &Policy.can?(scope, &1)
+      )
   end
 end

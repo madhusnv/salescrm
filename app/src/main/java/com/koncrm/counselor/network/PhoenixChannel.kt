@@ -4,7 +4,9 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.*
+import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -55,7 +57,7 @@ class PhoenixChannel(
 
         val wsUrl = baseUrl
             .replace("http://", "ws://")
-            .replace("https://", "wss://") + "/socket/websocket?token=$token"
+            .replace("https://", "wss://") + "/socket/websocket?token=$token&vsn=2.0.0"
 
         Log.i(TAG, "Connecting to: $wsUrl")
 
@@ -112,76 +114,96 @@ class PhoenixChannel(
     }
 
     private fun joinChannel(topic: String) {
-        val payload = JSONObject().apply {
-            put("topic", topic)
-            put("event", "phx_join")
-            put("payload", JSONObject())
-            put("ref", refCounter.incrementAndGet().toString())
-        }
+        val ref = nextRef()
+        val payload = JSONArray()
+            .put(ref)
+            .put(ref)
+            .put(topic)
+            .put("phx_join")
+            .put(JSONObject())
         webSocket?.send(payload.toString())
         Log.i(TAG, "Joining channel: $topic")
     }
 
     private fun handleMessage(text: String) {
         try {
-            val json = JSONObject(text)
-            val event = json.optString("event", "")
-            val payload = json.optJSONObject("payload") ?: JSONObject()
-
-            scope.launch {
-                when (event) {
-                    "lead:updated" -> {
-                        _events.emit(ChannelEvent.LeadUpdated(
-                            id = payload.optLong("id"),
-                            studentName = payload.optString("student_name", ""),
-                            status = payload.optString("status", "")
-                        ))
-                    }
-                    "call:synced" -> {
-                        _events.emit(ChannelEvent.CallSynced(
-                            id = payload.optLong("id"),
-                            phoneNumber = payload.optString("phone_number", ""),
-                            callType = payload.optString("call_type", "")
-                        ))
-                    }
-                    "lead:assigned" -> {
-                        _events.emit(ChannelEvent.LeadAssigned(
-                            id = payload.optLong("id"),
-                            studentName = payload.optString("student_name", ""),
-                            phoneNumber = payload.optString("phone_number", "")
-                        ))
-                    }
-                    "stats:updated" -> {
-                        _events.emit(ChannelEvent.StatsUpdated(
-                            synced = payload.optInt("synced", 0),
-                            pending = payload.optInt("pending", 0)
-                        ))
-                    }
-                    "recording:uploaded" -> {
-                        _events.emit(ChannelEvent.RecordingUploaded(
-                            id = payload.optLong("id"),
-                            leadId = payload.optLong("lead_id").takeIf { it > 0 },
-                            status = payload.optString("status", ""),
-                            durationSeconds = payload.optLong("duration_seconds", 0)
-                        ))
-                    }
-                    "recording:status" -> {
-                        _events.emit(ChannelEvent.RecordingStatus(
-                            id = payload.optLong("id"),
-                            status = payload.optString("status", "")
-                        ))
-                    }
-                    "phx_reply" -> {
-                        val status = payload.optString("status")
-                        Log.d(TAG, "Channel reply: $status")
-                    }
-                    "phx_error" -> {
-                        Log.e(TAG, "Channel error: $payload")
-                    }
-                }
+            when (val parsed = JSONTokener(text).nextValue()) {
+                is JSONArray -> handleArrayMessage(parsed)
+                is JSONObject -> handleObjectMessage(parsed)
+                else -> Log.w(TAG, "Unknown message format: $text")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse message", e)
+        }
+    }
+
+    private fun handleArrayMessage(message: JSONArray) {
+        val event = message.optString(3, "")
+        val payload = message.optJSONObject(4) ?: JSONObject()
+        handleEvent(event, payload)
+    }
+
+    private fun handleObjectMessage(message: JSONObject) {
+        val event = message.optString("event", "")
+        val payload = message.optJSONObject("payload") ?: JSONObject()
+        handleEvent(event, payload)
+    }
+
+    private fun handleEvent(event: String, payload: JSONObject) {
+        scope.launch {
+            when (event) {
+                "lead:updated" -> {
+                    _events.emit(ChannelEvent.LeadUpdated(
+                        id = payload.optLong("id"),
+                        studentName = payload.optString("student_name", ""),
+                        status = payload.optString("status", "")
+                    ))
+                }
+                "call:synced" -> {
+                    _events.emit(ChannelEvent.CallSynced(
+                        id = payload.optLong("id"),
+                        phoneNumber = payload.optString("phone_number", ""),
+                        callType = payload.optString("call_type", "")
+                    ))
+                }
+                "lead:assigned" -> {
+                    _events.emit(ChannelEvent.LeadAssigned(
+                        id = payload.optLong("id"),
+                        studentName = payload.optString("student_name", ""),
+                        phoneNumber = payload.optString("phone_number", "")
+                    ))
+                }
+                "stats:updated" -> {
+                    _events.emit(ChannelEvent.StatsUpdated(
+                        synced = payload.optInt("synced", 0),
+                        pending = payload.optInt("pending", 0)
+                    ))
+                }
+                "recording:uploaded" -> {
+                    _events.emit(ChannelEvent.RecordingUploaded(
+                        id = payload.optLong("id"),
+                        leadId = payload.optLong("lead_id").takeIf { it > 0 },
+                        status = payload.optString("status", ""),
+                        durationSeconds = payload.optLong("duration_seconds", 0)
+                    ))
+                }
+                "recording:status" -> {
+                    _events.emit(ChannelEvent.RecordingStatus(
+                        id = payload.optLong("id"),
+                        status = payload.optString("status", "")
+                    ))
+                }
+                "phx_reply" -> {
+                    val status = payload.optString("status")
+                    Log.d(TAG, "Channel reply: $status")
+                }
+                "phx_error" -> {
+                    Log.e(TAG, "Channel error: $payload")
+                }
+                "presence_state" -> {
+                    Log.d(TAG, "Channel presence: $payload")
+                }
+            }
         }
     }
 
@@ -201,12 +223,15 @@ class PhoenixChannel(
     }
 
     fun sendHeartbeat() {
-        val payload = JSONObject().apply {
-            put("topic", "phoenix")
-            put("event", "heartbeat")
-            put("payload", JSONObject())
-            put("ref", refCounter.incrementAndGet().toString())
-        }
+        val ref = nextRef()
+        val payload = JSONArray()
+            .put(JSONObject.NULL)
+            .put(ref)
+            .put("phoenix")
+            .put("heartbeat")
+            .put(JSONObject())
         webSocket?.send(payload.toString())
     }
+
+    private fun nextRef(): String = refCounter.incrementAndGet().toString()
 }

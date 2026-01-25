@@ -18,6 +18,7 @@ import com.koncrm.counselor.recordings.RecordingManager
 import com.koncrm.counselor.recordings.RecordingStore
 import com.koncrm.counselor.recordings.RecordingUploadWorker
 import com.koncrm.counselor.work.CallNoteStore
+import com.koncrm.counselor.work.CallLogSyncScheduler
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.NetworkType
@@ -131,6 +132,8 @@ class CallMonitoringService : Service() {
                 durationMillis = event.durationMillis
             )
         }
+
+        CallLogSyncScheduler.enqueueNow(applicationContext)
 
         val file = activeRecordingFile ?: return
         val manager = recordingManager ?: return

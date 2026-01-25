@@ -4,6 +4,7 @@ defmodule BackendWeb.LeadShowLiveTest do
   import Phoenix.LiveViewTest
 
   alias Backend.Accounts
+  alias Backend.Access
   alias Backend.Access.Role
   alias Backend.Leads
   alias Backend.Recordings.CallRecording
@@ -28,6 +29,9 @@ defmodule BackendWeb.LeadShowLiveTest do
         name: "Super Admin",
         is_system: true
       })
+
+    Access.seed_permissions!()
+    Access.assign_default_permissions!(role)
 
     {:ok, admin} =
       Accounts.register_user(%{

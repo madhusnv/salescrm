@@ -35,7 +35,7 @@ class AuthApi(
                     val json = JSONObject(body)
                     val access = json.getString("access_token")
                     val refresh = json.getString("refresh_token")
-                    val userId = json.optLong("user_id", 0L)
+                    val userId = resolveUserId(json)
 
                     SessionTokens(access, refresh, userId)
                 }
@@ -65,7 +65,7 @@ class AuthApi(
                     val json = JSONObject(body)
                     val access = json.getString("access_token")
                     val refresh = json.getString("refresh_token")
-                    val userId = json.optLong("user_id", 0L)
+                    val userId = resolveUserId(json)
                     SessionTokens(access, refresh, userId)
                 }
             }
@@ -76,5 +76,11 @@ class AuthApi(
 
     companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
+    }
+
+    private fun resolveUserId(json: JSONObject): Long {
+        val direct = json.optLong("user_id", 0L)
+        if (direct > 0) return direct
+        return json.optJSONObject("user")?.optLong("id", 0L) ?: 0L
     }
 }

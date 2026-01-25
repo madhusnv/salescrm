@@ -3,6 +3,7 @@ defmodule Backend.Accounts do
 
   alias Backend.Repo
   alias Backend.Access.Role
+  alias Backend.Access.Permissions, as: P
   alias Backend.Accounts.{Scope, User, UserToken, UserNotifier}
   alias Backend.Organizations.{Branch, Organization}
 
@@ -186,12 +187,20 @@ defmodule Backend.Accounts do
     User.password_changeset(user, attrs, opts)
   end
 
+  @doc """
+  Lists users who can be assigned leads (counselors).
+
+  Uses permission-based lookup via `leads.read_own` permission instead of
+  role name to avoid brittle string comparisons.
+  """
   def list_counselors(organization_id, branch_id \\ nil) do
+    counselor_role_ids = get_counselor_role_ids(organization_id)
+
     query =
       User
       |> where([u], u.organization_id == ^organization_id)
-      |> join(:inner, [u], r in assoc(u, :role))
-      |> where([_u, r], r.name == "Counselor")
+      |> where([u], u.role_id in ^counselor_role_ids)
+      |> where([u], u.is_active == true)
       |> order_by([u], asc: u.full_name)
 
     query =
@@ -202,6 +211,28 @@ defmodule Backend.Accounts do
       end
 
     Repo.all(query)
+  end
+
+  defp get_counselor_role_ids(organization_id) do
+    exclude_role_ids =
+      from(rp in Backend.Access.RolePermission,
+        join: p in Backend.Access.Permission,
+        on: p.id == rp.permission_id,
+        join: r in Role,
+        on: r.id == rp.role_id,
+        where: r.organization_id == ^organization_id,
+        where: p.key in ^[P.leads_read_all(), P.leads_read_branch()],
+        select: rp.role_id
+      )
+
+    Role
+    |> where([r], r.organization_id == ^organization_id)
+    |> join(:inner, [r], rp in Backend.Access.RolePermission, on: rp.role_id == r.id)
+    |> join(:inner, [_r, rp], p in Backend.Access.Permission, on: p.id == rp.permission_id)
+    |> where([_r, _rp, p], p.key == ^P.leads_read_own())
+    |> where([r], r.id not in subquery(exclude_role_ids))
+    |> select([r], r.id)
+    |> Repo.all()
   end
 
   @doc """

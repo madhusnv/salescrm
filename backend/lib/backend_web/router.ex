@@ -66,6 +66,7 @@ defmodule BackendWeb.Router do
     put("/recordings/:id/upload", RecordingController, :upload)
     post("/recordings/:id/complete", RecordingController, :complete)
     get("/recordings", RecordingController, :index)
+    get("/counselor-stats", CounselorStatsController, :show)
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

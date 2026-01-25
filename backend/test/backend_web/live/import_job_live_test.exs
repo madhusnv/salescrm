@@ -4,6 +4,7 @@ defmodule BackendWeb.ImportJobLiveTest do
   import Phoenix.LiveViewTest
 
   alias Backend.Accounts
+  alias Backend.Access
   alias Backend.Access.Role
   alias Backend.Imports.{ImportJob, ImportRow}
   alias Backend.Organizations.{Branch, Organization, University}
@@ -67,6 +68,10 @@ defmodule BackendWeb.ImportJobLiveTest do
 
     counselor_role =
       Repo.insert!(%Role{organization_id: organization.id, name: "Counselor", is_system: true})
+
+    Access.seed_permissions!()
+    Access.assign_default_permissions!(admin_role)
+    Access.assign_default_permissions!(counselor_role)
 
     {:ok, admin} =
       Accounts.register_user(%{

@@ -1,14 +1,14 @@
 defmodule BackendWeb.Plugs.RequirePermission do
   import Plug.Conn
 
-  alias Backend.Access
+  alias Backend.Access.Policy
 
   def init(permission_key), do: permission_key
 
-  def call(conn, permission_key) when is_binary(permission_key) do
-    user = conn.assigns[:current_scope] && conn.assigns.current_scope.user
+  def call(conn, permission_key) do
+    scope = conn.assigns[:current_scope]
 
-    if user && Access.role_has_permission?(user, permission_key) do
+    if scope && authorized?(scope, permission_key) do
       conn
     else
       conn
@@ -16,5 +16,13 @@ defmodule BackendWeb.Plugs.RequirePermission do
       |> Phoenix.Controller.text("forbidden")
       |> halt()
     end
+  end
+
+  defp authorized?(scope, permission_key) when is_binary(permission_key) do
+    Policy.can?(scope, permission_key)
+  end
+
+  defp authorized?(scope, permissions) when is_list(permissions) do
+    Enum.any?(permissions, &Policy.can?(scope, &1))
   end
 end

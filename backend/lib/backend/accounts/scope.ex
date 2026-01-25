@@ -2,32 +2,71 @@ defmodule Backend.Accounts.Scope do
   @moduledoc """
   Defines the scope of the caller to be used throughout the app.
 
-  The `Backend.Accounts.Scope` allows public interfaces to receive
-  information about the caller, such as if the call is initiated from an
-  end-user, and if so, which user. Additionally, such a scope can carry fields
-  such as "super user" or other privileges for use as authorization, or to
-  ensure specific code paths can only be access for a given scope.
+  The Scope struct contains preloaded user data, permissions, and role information
+  to avoid repeated database queries during authorization checks.
 
-  It is useful for logging as well as for scoping pubsub subscriptions and
-  broadcasts when a caller subscribes to an interface or performs a particular
-  action.
-
-  Feel free to extend the fields on this struct to fit the needs of
-  growing application requirements.
+  Built once at authentication time (login or session mount), then passed
+  throughout the request lifecycle.
   """
 
   alias Backend.Accounts.User
+  alias Backend.Access.Permissions
+  alias Backend.Repo
 
-  defstruct user: nil
+  import Ecto.Query
+
+  defstruct [
+    :user,
+    :user_id,
+    :organization_id,
+    :branch_id,
+    :role_id,
+    :role_name,
+    :permissions,
+    :is_super_admin
+  ]
 
   @doc """
-  Creates a scope for the given user.
+  Creates a scope for the given user with preloaded permissions.
+
+  This function:
+  - Preloads the user's role and branch
+  - Loads all permissions for the user's role
+  - Caches everything in the Scope struct
 
   Returns nil if no user is given.
   """
   def for_user(%User{} = user) do
-    %__MODULE__{user: user}
+    user = Repo.preload(user, [:role, :branch])
+    permissions = load_permissions(user.role_id)
+    permission_set = MapSet.new(permissions)
+
+    is_super_admin =
+      Enum.all?(Permissions.super_admin_permissions(), &MapSet.member?(permission_set, &1))
+
+    %__MODULE__{
+      user: user,
+      user_id: user.id,
+      organization_id: user.organization_id,
+      branch_id: user.branch_id,
+      role_id: user.role_id,
+      role_name: user.role && user.role.name,
+      permissions: permission_set,
+      is_super_admin: is_super_admin
+    }
   end
 
   def for_user(nil), do: nil
+
+  defp load_permissions(nil), do: []
+
+  defp load_permissions(role_id) do
+    from(rp in Backend.Access.RolePermission,
+      join: p in Backend.Access.Permission,
+      on: rp.permission_id == p.id,
+      where: rp.role_id == ^role_id,
+      select: p.key
+    )
+    |> Repo.all()
+  end
 end

@@ -66,12 +66,12 @@ fun LeadFilters(
                     tint = if (isFocused) AccentIndigo else colors.onSurface.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.width(10.dp))
-                
+
                 BasicTextField(
                     value = searchQuery,
-                    onValueChange = { 
+                    onValueChange = {
                         onSearchChange(it)
                         onApply()
                     },
@@ -97,10 +97,10 @@ fun LeadFilters(
                         }
                     }
                 )
-                
+
                 if (searchQuery.isNotEmpty()) {
                     IconButton(
-                        onClick = { 
+                        onClick = {
                             onSearchChange("")
                             onApply()
                         },
@@ -124,11 +124,12 @@ fun LeadFilters(
             val filters = listOf(
                 "" to "All",
                 "new" to "New",
+                "contacted" to "Contacted",
                 "follow_up" to "Follow up",
                 "applied" to "Applied",
                 "not_interested" to "Not interested"
             )
-            
+
             items(filters) { (value, label) ->
                 FilterChip(
                     value = value,

@@ -2,7 +2,6 @@ defmodule Backend.Recordings do
   import Ecto.Query, warn: false
 
   alias Backend.Accounts.Scope
-  alias Backend.Access
   alias Backend.Audit
   alias Backend.Analytics
   alias Backend.Recordings.CallRecording
@@ -31,7 +30,7 @@ defmodule Backend.Recordings do
       recording.organization_id != scope.user.organization_id ->
         {:error, :forbidden}
 
-      recording.counselor_id != scope.user.id and not Access.super_admin?(scope.user) ->
+      recording.counselor_id != scope.user.id and not scope.is_super_admin ->
         {:error, :forbidden}
 
       true ->

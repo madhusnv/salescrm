@@ -127,16 +127,18 @@ defmodule Backend.Analytics do
     day_start = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
     day_end = DateTime.add(day_start, 86_400, :second)
 
-    events =
+    event_counts =
       AnalyticsEvent
       |> where([e], e.organization_id == ^scope.user.organization_id)
       |> maybe_scope_event_branch(scope, branch_scoped)
       |> where([e], e.occurred_at >= ^day_start and e.occurred_at < ^day_end)
+      |> group_by([e], e.event_type)
+      |> select([e], {e.event_type, count(e.id)})
       |> Repo.all()
+      |> Map.new()
 
     Map.new(@default_metrics, fn metric ->
-      count = Enum.count(events, &(&1.event_type == metric))
-      {metric, count}
+      {metric, Map.get(event_counts, metric, 0)}
     end)
   end
 

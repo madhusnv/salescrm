@@ -1,7 +1,6 @@
 defmodule BackendWeb.DashboardLive do
   use BackendWeb, :live_view
 
-  alias Backend.Access
   alias Backend.Analytics
   alias Backend.Accounts
 
@@ -10,7 +9,7 @@ defmodule BackendWeb.DashboardLive do
   @impl true
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
-    branch_scoped = !Access.super_admin?(scope.user)
+    branch_scoped = not scope.is_super_admin
     today = Date.utc_today()
 
     # Get metrics for last 7 days

@@ -3,12 +3,12 @@ defmodule BackendWeb.RequirePermissionOnMount do
 
   import Phoenix.LiveView
 
-  alias Backend.Access
+  alias Backend.Access.Policy
 
-  def on_mount(permission_key, _params, _session, socket) when is_binary(permission_key) do
-    user = socket.assigns.current_scope && socket.assigns.current_scope.user
+  def on_mount(permission_key, _params, _session, socket) do
+    scope = socket.assigns.current_scope
 
-    if user && Access.role_has_permission?(user, permission_key) do
+    if scope && authorized?(scope, permission_key) do
       {:cont, socket}
     else
       socket =
@@ -18,5 +18,13 @@ defmodule BackendWeb.RequirePermissionOnMount do
 
       {:halt, socket}
     end
+  end
+
+  defp authorized?(scope, permission_key) when is_binary(permission_key) do
+    Policy.can?(scope, permission_key)
+  end
+
+  defp authorized?(scope, permissions) when is_list(permissions) do
+    Enum.any?(permissions, &Policy.can?(scope, &1))
   end
 end
