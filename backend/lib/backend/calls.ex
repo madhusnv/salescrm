@@ -56,33 +56,37 @@ defmodule Backend.Calls do
           lead =
             Leads.get_lead_by_phone(scope, normalized_phone)
 
-          data =
-            attrs
-            |> Map.put("organization_id", user.organization_id)
-            |> Map.put("branch_id", user.branch_id)
-            |> Map.put("counselor_id", user.id)
-            |> Map.put("lead_id", lead && lead.id)
-            |> Map.put("normalized_phone_number", normalized_phone)
-            |> Map.put_new("consent_granted", false)
+          if is_nil(lead) do
+            {:ok, :ignored}
+          else
+            data =
+              attrs
+              |> Map.put("organization_id", user.organization_id)
+              |> Map.put("branch_id", user.branch_id)
+              |> Map.put("counselor_id", user.id)
+              |> Map.put("lead_id", lead.id)
+              |> Map.put("normalized_phone_number", normalized_phone)
+              |> Map.put_new("consent_granted", false)
 
-          %CallLog{}
-          |> CallLog.changeset(data)
-          |> Repo.insert()
-          |> case do
-            {:ok, call_log} ->
-              _ = Analytics.log_event(scope, "call_logged", %{lead_id: call_log.lead_id})
+            %CallLog{}
+            |> CallLog.changeset(data)
+            |> Repo.insert()
+            |> case do
+              {:ok, call_log} ->
+                _ = Analytics.log_event(scope, "call_logged", %{lead_id: call_log.lead_id})
 
-              if call_log.consent_granted do
-                _ = Analytics.log_event(scope, "consent_captured", %{lead_id: call_log.lead_id})
-              end
+                if call_log.consent_granted do
+                  _ = Analytics.log_event(scope, "consent_captured", %{lead_id: call_log.lead_id})
+                end
 
-              _ = maybe_mark_lead_contacted(scope, lead, call_log)
-              _ = Broadcaster.broadcast_call_synced(scope.user.id, call_log)
+                _ = maybe_mark_lead_contacted(scope, lead, call_log)
+                _ = Broadcaster.broadcast_call_synced(scope.user.id, call_log)
 
-              {:ok, call_log, :created}
+                {:ok, call_log, :created}
 
-            {:error, changeset} ->
-              {:error, changeset}
+              {:error, changeset} ->
+                {:error, changeset}
+            end
           end
       end
     end

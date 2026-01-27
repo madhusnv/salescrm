@@ -13,11 +13,10 @@ defmodule BackendWeb.Api.CallLogController do
     when action in [:index]
   )
 
-  alias Backend.Accounts.Scope
   alias Backend.Calls
 
   def create(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
 
     attrs = %{
       "phone_number" => Map.get(params, "phone_number"),
@@ -39,6 +38,9 @@ defmodule BackendWeb.Api.CallLogController do
       {:ok, call_log, :duplicate} ->
         json(conn, %{data: render_call_log(call_log), status: "duplicate"})
 
+      {:ok, :ignored} ->
+        json(conn, %{status: "ignored", reason: "no_lead_match"})
+
       {:error, :invalid_phone} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -52,7 +54,7 @@ defmodule BackendWeb.Api.CallLogController do
   end
 
   def index(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead_id = parse_int(Map.get(params, "lead_id"), nil)
     page = parse_int(Map.get(params, "page", "1"), 1)
     page_size = parse_int(Map.get(params, "page_size", "20"), 20)

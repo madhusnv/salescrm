@@ -51,21 +51,20 @@ defmodule Backend.Audit do
 
     AuditLog
     |> where([a], a.organization_id == ^scope.user.organization_id)
+    |> join(:left, [a], u in assoc(a, :user))
     |> order_by([a], desc: a.inserted_at)
     |> limit(^limit)
+    |> select([a, u], %{
+      id: a.id,
+      action: a.action,
+      user_email: u.email,
+      resource_id: coalesce(a.lead_id, a.recording_id),
+      metadata: a.metadata,
+      inserted_at: a.inserted_at
+    })
     |> Repo.all()
     |> Enum.map(fn entry ->
-      user = if entry.user_id, do: Backend.Accounts.get_user(entry.user_id), else: nil
-
-      %{
-        id: entry.id,
-        action: entry.action,
-        user_email: user && user.email,
-        resource_type: parse_resource_type(entry.action),
-        resource_id: entry.lead_id || entry.recording_id,
-        metadata: entry.metadata,
-        inserted_at: entry.inserted_at
-      }
+      Map.put(entry, :resource_type, parse_resource_type(entry.action))
     end)
   end
 

@@ -5,14 +5,17 @@ import android.provider.CallLog
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.koncrm.counselor.auth.SessionStore
+import com.koncrm.counselor.data.repository.LeadRepository
 import com.koncrm.counselor.network.CallLogApi
 import com.koncrm.counselor.recordings.RecordingStore
+import com.koncrm.counselor.util.LeadPhoneIndex
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import java.time.Instant
 import android.util.Log
 
 private const val TAG = "CallLogSyncWorker"
+private const val LEAD_CACHE_MAX_AGE_MS = 60 * 60 * 1000L
 
 class CallLogSyncWorker(
     appContext: Context,
@@ -31,6 +34,23 @@ class CallLogSyncWorker(
             return Result.retry()
         }
         Log.d(TAG, "Session found, proceeding with sync")
+
+        val leadRepository = LeadRepository(applicationContext)
+        val lastLeadSyncAt = leadRepository.getLastSyncedAt()
+        val now = System.currentTimeMillis()
+        val cacheStale = lastLeadSyncAt == null || now - lastLeadSyncAt > LEAD_CACHE_MAX_AGE_MS
+        if (cacheStale) {
+            val leadSync = leadRepository.syncLeads()
+            if (leadSync.isFailure) {
+                Log.w(TAG, "Lead cache refresh failed; retrying sync later")
+                return Result.retry()
+            }
+        }
+        val leadIndex: LeadPhoneIndex = leadRepository.buildPhoneIndex()
+        if (leadIndex.isEmpty()) {
+            Log.i(TAG, "Lead cache is empty; will skip non-lead calls")
+        }
+
         val syncStore = CallLogSyncStore(applicationContext)
         val lastSyncedAt = syncStore.getLastSyncedAt() ?: 0L
         val lastSyncedCallId = syncStore.getLastSyncedCallId() ?: 0L
@@ -103,9 +123,9 @@ class CallLogSyncWorker(
                     val callType = mapCallType(it.getInt(typeIndex))
                     val timestamp = it.getLong(dateIndex)
                     val durationSeconds = it.getLong(durationIndex)
-                    val normalizedNumber = normalizePhoneNumber(number)
+                    val leadId = leadIndex.findLeadId(number)
 
-                    if (normalizedNumber.length < 6) {
+                    if (leadId == null) {
                         skippedCount += 1
                         if (timestamp > newestTimestamp) {
                             newestTimestamp = timestamp
@@ -113,7 +133,7 @@ class CallLogSyncWorker(
                         } else if (timestamp == newestTimestamp && callId > newestCallId) {
                             newestCallId = callId
                         }
-                        Log.w(TAG, "Skipping short/invalid number: '$number'")
+                        Log.d(TAG, "Skipping non-lead call log")
                         continue
                     }
 
@@ -148,6 +168,7 @@ class CallLogSyncWorker(
                     } else {
                         when (result.getOrNull()) {
                             "duplicate" -> duplicateCount += 1
+                            "ignored" -> skippedCount += 1
                             else -> syncedCount += 1
                         }
                         if (timestamp > newestTimestamp) {
@@ -185,12 +206,4 @@ class CallLogSyncWorker(
         }
     }
 
-    private fun normalizePhoneNumber(number: String): String {
-        val digits = number.filter { it.isDigit() }
-        return if (digits.startsWith("91") && digits.length == 12) {
-            digits.drop(2)
-        } else {
-            digits
-        }
-    }
 }

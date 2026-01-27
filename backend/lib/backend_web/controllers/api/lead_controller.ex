@@ -13,7 +13,6 @@ defmodule BackendWeb.Api.LeadController do
     when action in [:create, :update_status, :add_note, :schedule_followup]
   )
 
-  alias Backend.Accounts.Scope
   alias Backend.Access.Policy
   alias Backend.Calls
   alias Backend.Leads
@@ -21,10 +20,20 @@ defmodule BackendWeb.Api.LeadController do
   alias Backend.Recordings
 
   def index(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     page = parse_int(Map.get(params, "page", "1"), 1)
     page_size = parse_int(Map.get(params, "page_size", "20"), 20)
-    filters = Map.take(params, ["status", "search", "counselor_id", "include_merged"])
+
+    filters =
+      Map.take(params, [
+        "status",
+        "search",
+        "counselor_id",
+        "include_merged",
+        "university_id",
+        "activity_filter",
+        "followup_filter"
+      ])
 
     leads = Leads.list_leads(scope, filters, page, page_size)
     total_count = Leads.count_leads(scope, filters)
@@ -40,7 +49,7 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   def create(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
 
     attrs = %{
       "student_name" => Map.get(params, "student_name") || "Unknown Lead",
@@ -61,7 +70,7 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   def show(conn, %{"id" => id}) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead = Leads.get_lead!(scope, id)
 
     recordings =
@@ -83,7 +92,7 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   def update_status(conn, %{"id" => id, "status" => status}) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead = Leads.get_lead!(scope, id)
 
     case Leads.update_lead_status(scope, lead, status) do
@@ -98,7 +107,7 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   def add_note(conn, %{"id" => id, "body" => body}) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead = Leads.get_lead!(scope, id)
 
     case Leads.add_note(scope, lead, body) do
@@ -113,7 +122,7 @@ defmodule BackendWeb.Api.LeadController do
   end
 
   def schedule_followup(conn, %{"id" => id} = params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead = Leads.get_lead!(scope, id)
 
     with {:ok, due_at} <- parse_datetime(Map.get(params, "due_at")),

@@ -14,12 +14,17 @@ data class LeadHomeUiState(
     // Lead list state
     val leads: List<LeadSummary> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val hasMoreLeads: Boolean = true,
     val currentPage: Int = 1,
     
     // Filters
     val searchQuery: String = "",
     val statusFilter: String = "",
+    val universityFilter: Long? = null,
+    val activityFilter: String = "",  // "", "today", "week", "stale"
+    val followupFilter: String = "",  // "", "overdue", "due_today", "upcoming"
+    val isFilterExpanded: Boolean = false,
     
     // Selected lead detail
     val selectedLead: LeadDetail? = null,
@@ -82,7 +87,13 @@ sealed class LeadHomeEvent {
     // Filters
     data class UpdateSearchQuery(val query: String) : LeadHomeEvent()
     data class UpdateStatusFilter(val status: String) : LeadHomeEvent()
+    data class UpdateUniversityFilter(val universityId: Long?) : LeadHomeEvent()
+    data class UpdateActivityFilter(val filter: String) : LeadHomeEvent()
+    data class UpdateFollowupFilter(val filter: String) : LeadHomeEvent()
+    object ToggleFilterExpanded : LeadHomeEvent()
+    object ClearAllFilters : LeadHomeEvent()
     object ApplyFilters : LeadHomeEvent()
+    object RefreshLeads : LeadHomeEvent()
     object LoadMoreLeads : LeadHomeEvent()
     
     // Lead detail actions

@@ -5,9 +5,9 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.*
 import com.koncrm.counselor.auth.SessionStore
+import com.koncrm.counselor.data.repository.LeadRepository
 import com.koncrm.counselor.network.ApiConfig
 import com.koncrm.counselor.network.AuthenticatedHttpClient
-import com.koncrm.counselor.network.LeadApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
@@ -31,7 +31,7 @@ class FolderRecordingSyncWorker(
     private val folderStore = RecordingFolderStore(applicationContext)
     private val syncedStore = SyncedRecordingsStore(applicationContext)
     private val sessionStore = SessionStore(applicationContext)
-    private val leadApi = LeadApi()
+    private val leadRepository = LeadRepository(applicationContext)
     private val recordingApi = RecordingApi(ApiConfig.BASE_URL)
     private val client
         get() = AuthenticatedHttpClient.getClient()
@@ -43,6 +43,17 @@ class FolderRecordingSyncWorker(
         AuthenticatedHttpClient.init(sessionStore)
 
         val folderUri = folderStore.getFolderUri() ?: return Result.success() // No folder selected
+
+        val lastLeadSyncAt = leadRepository.getLastSyncedAt()
+        val now = System.currentTimeMillis()
+        val cacheStale = lastLeadSyncAt == null || now - lastLeadSyncAt > LEAD_CACHE_MAX_AGE_MS
+        if (cacheStale) {
+            val leadSync = leadRepository.syncLeads()
+            if (leadSync.isFailure) {
+                return Result.retry()
+            }
+        }
+        val leadIndex = leadRepository.buildPhoneIndex()
 
         return withContext(Dispatchers.IO) {
             try {
@@ -60,10 +71,12 @@ class FolderRecordingSyncWorker(
                     val phoneNumber = extractPhoneFromFilename(file.name)
 
                     // Find matching lead
-                    var leadId: Long? = null
-                    if (phoneNumber != null) {
-                        val lookupResult = leadApi.findLeadIdByPhone(phoneNumber)
-                        leadId = lookupResult.getOrNull()
+                    val leadId = leadIndex.findLeadId(phoneNumber)
+
+                    if (leadId == null) {
+                        // Skip non-lead recordings to avoid uploading personal calls
+                        syncedStore.markSynced(file.uri.toString(), file.name)
+                        continue
                     }
 
                     // Upload the recording
@@ -177,6 +190,7 @@ class FolderRecordingSyncWorker(
     }
 
     companion object {
+        private const val LEAD_CACHE_MAX_AGE_MS = 60 * 60 * 1000L
         const val WORK_NAME = "folder_recording_sync"
         const val KEY_UPLOADED_COUNT = "uploaded_count"
         const val KEY_FAILED_COUNT = "failed_count"

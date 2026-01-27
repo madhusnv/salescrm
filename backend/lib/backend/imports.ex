@@ -4,8 +4,10 @@ defmodule Backend.Imports do
   alias Backend.Assignments
   alias Backend.Imports.{CsvParser, ImportJob, ImportJobWorker, ImportRow}
   alias Backend.Leads
-  alias Backend.Leads.LeadDedupeCandidate
+  alias Backend.Leads.{Lead, LeadDedupeCandidate}
   alias Backend.Repo
+
+  @batch_size 500
 
   def list_import_jobs(organization_id, filters \\ %{}, page \\ 1, page_size \\ 20) do
     offset = max(page - 1, 0) * page_size
@@ -88,46 +90,44 @@ defmodule Backend.Imports do
   end
 
   def process_job(%ImportJob{} = job, csv_content) do
-    Repo.transaction(fn ->
-      job =
-        job
-        |> ImportJob.changeset(%{status: :processing, started_at: DateTime.utc_now(:second)})
-        |> Repo.update!()
+    job =
+      job
+      |> ImportJob.changeset(%{status: :processing, started_at: DateTime.utc_now(:second)})
+      |> Repo.update!()
 
-      case CsvParser.parse_leads_csv(csv_content) do
-        {:ok, parsed_rows} ->
-          {row_attrs, summary} = build_rows(job, parsed_rows)
-          inserted_count = insert_rows(row_attrs)
-          {dedupe_hard, dedupe_soft} = apply_dedupe(job)
-          {assignment_failures, assignment_errors} = assign_rows(job)
-          leads_created = create_leads_for_job(job)
-          dedupe_candidates = create_dedupe_candidates(job)
+    case CsvParser.parse_leads_csv(csv_content) do
+      {:ok, parsed_rows} ->
+        {row_attrs, summary} = build_rows(job, parsed_rows)
+        inserted_count = insert_rows(row_attrs)
+        {dedupe_hard, dedupe_soft} = apply_dedupe(job)
+        {assignment_failures, assignment_errors} = assign_rows(job)
+        leads_created = create_leads_for_job(job)
+        dedupe_candidates = create_dedupe_candidates(job)
 
-          update_job(job, %{
-            status: :completed,
-            total_rows: summary.total_rows,
-            valid_rows: summary.valid_rows,
-            invalid_rows: summary.invalid_rows,
-            inserted_rows: inserted_count,
-            error_summary:
-              summary.error_summary
-              |> Map.put("assignment_failures", assignment_failures)
-              |> Map.put("assignment_errors", assignment_errors)
-              |> Map.put("leads_created", leads_created)
-              |> Map.put("dedupe_hard", dedupe_hard)
-              |> Map.put("dedupe_soft", dedupe_soft)
-              |> Map.put("dedupe_candidates", dedupe_candidates),
-            completed_at: DateTime.utc_now(:second)
-          })
+        update_job(job, %{
+          status: :completed,
+          total_rows: summary.total_rows,
+          valid_rows: summary.valid_rows,
+          invalid_rows: summary.invalid_rows,
+          inserted_rows: inserted_count,
+          error_summary:
+            summary.error_summary
+            |> Map.put("assignment_failures", assignment_failures)
+            |> Map.put("assignment_errors", assignment_errors)
+            |> Map.put("leads_created", leads_created)
+            |> Map.put("dedupe_hard", dedupe_hard)
+            |> Map.put("dedupe_soft", dedupe_soft)
+            |> Map.put("dedupe_candidates", dedupe_candidates),
+          completed_at: DateTime.utc_now(:second)
+        })
 
-        {:error, reason} ->
-          update_job(job, %{
-            status: :failed,
-            error_summary: %{error: inspect(reason)},
-            completed_at: DateTime.utc_now(:second)
-          })
-      end
-    end)
+      {:error, reason} ->
+        update_job(job, %{
+          status: :failed,
+          error_summary: %{error: inspect(reason)},
+          completed_at: DateTime.utc_now(:second)
+        })
+    end
   end
 
   defp build_rows(job, parsed_rows) do
@@ -213,55 +213,56 @@ defmodule Backend.Imports do
   end
 
   defp assign_rows(job) do
-    rows =
+    base_query =
       ImportRow
       |> where([r], r.import_job_id == ^job.id and r.status == :valid)
       |> where([r], r.dedupe_status in ["none", "soft"])
-      |> order_by([r], asc: r.row_number)
-      |> Repo.all()
 
-    Enum.reduce(rows, {0, %{}}, fn row, {failures, error_counts} ->
-      case Assignments.pick_counselor(job.organization_id, job.branch_id, job.university_id) do
-        {:ok, counselor_id} ->
-          Repo.update_all(
-            from(r in ImportRow, where: r.id == ^row.id),
-            set: [
-              assigned_counselor_id: counselor_id,
-              assignment_status: "assigned",
-              assignment_error: nil
-            ]
-          )
+    rules =
+      Assignments.list_assignment_candidates(
+        job.organization_id,
+        job.branch_id,
+        job.university_id
+      )
 
-          {failures, error_counts}
+    if rules == [] do
+      {count, _} =
+        Repo.update_all(
+          base_query,
+          set: [
+            assignment_status: "failed",
+            assignment_error: %{error: "no_assignment_rules"}
+          ]
+        )
 
-        {:error, reason} ->
-          reason_text = to_string(reason)
+      {count, %{"no_assignment_rules" => count}}
+    else
+      acc = %{rules: rules, failures: 0, errors: %{}}
 
-          Repo.update_all(
-            from(r in ImportRow, where: r.id == ^row.id),
-            set: [
-              assignment_status: "failed",
-              assignment_error: %{error: reason_text}
-            ]
-          )
+      acc =
+        reduce_in_batches(
+          base_query |> select([r], %{id: r.id}),
+          @batch_size,
+          acc,
+          fn rows, acc -> assign_rows_batch(rows, acc) end
+        )
 
-          {failures + 1, Map.update(error_counts, reason_text, 1, &(&1 + 1))}
-      end
-    end)
+      {acc.failures, acc.errors}
+    end
   end
 
   defp create_leads_for_job(job) do
-    rows =
+    base_query =
       ImportRow
       |> where([r], r.import_job_id == ^job.id and r.assignment_status == "assigned")
       |> where([r], r.dedupe_status in ["none", "soft"])
       |> where([r], is_nil(r.lead_id))
-      |> order_by([r], asc: r.row_number)
-      |> Repo.all()
 
-    Enum.reduce(rows, 0, fn row, count ->
-      Leads.create_from_import_row(job, row)
-      count + 1
+    reduce_in_batches(base_query, @batch_size, 0, fn rows, count ->
+      Enum.reduce(rows, count, fn row, acc ->
+        Leads.create_from_import_row(job, row)
+        acc + 1
+      end)
     end)
   end
 
@@ -297,96 +298,63 @@ defmodule Backend.Imports do
   end
 
   defp apply_dedupe(job) do
-    rows =
+    base_query =
       ImportRow
       |> where([r], r.import_job_id == ^job.id and r.status == :valid)
-      |> order_by([r], asc: r.row_number)
-      |> Repo.all()
+      |> select([r], %{
+        id: r.id,
+        normalized_phone_number: r.normalized_phone_number,
+        normalized_student_name: r.normalized_student_name
+      })
 
-    Enum.reduce(rows, {0, 0}, fn row, {hard_count, soft_count} ->
-      match =
-        find_existing_lead(
-          job.organization_id,
-          row.normalized_phone_number,
-          row.normalized_student_name
-        )
+    reduce_in_batches(base_query, @batch_size, {0, 0}, fn rows, {hard_total, soft_total} ->
+      phones =
+        rows
+        |> Enum.map(& &1.normalized_phone_number)
+        |> Enum.filter(&is_binary/1)
+        |> Enum.uniq()
 
-      case match do
-        {:hard, lead_id} ->
-          Repo.update_all(
-            from(r in ImportRow, where: r.id == ^row.id),
-            set: [
-              dedupe_status: "hard",
-              dedupe_reason: "phone_name_match",
-              dedupe_matched_lead_id: lead_id,
-              assignment_status: "skipped",
-              assignment_error: %{error: "duplicate_lead"}
-            ]
-          )
+      leads_by_phone = fetch_existing_leads_by_phone(job.organization_id, phones)
 
-          {hard_count + 1, soft_count}
+      {hard_updates, soft_updates} =
+        Enum.reduce(rows, {%{}, %{}}, fn row, {hard, soft} ->
+          case dedupe_match(row, leads_by_phone) do
+            {:hard, lead_id} ->
+              {Map.update(hard, lead_id, [row.id], &[row.id | &1]), soft}
 
-        {:soft, lead_id} ->
-          Repo.update_all(
-            from(r in ImportRow, where: r.id == ^row.id),
-            set: [
-              dedupe_status: "soft",
-              dedupe_reason: "phone_match",
-              dedupe_matched_lead_id: lead_id
-            ]
-          )
+            {:soft, lead_id} ->
+              {hard, Map.update(soft, lead_id, [row.id], &[row.id | &1])}
 
-          {hard_count, soft_count + 1}
+            :none ->
+              {hard, soft}
+          end
+        end)
 
-        :none ->
-          {hard_count, soft_count}
-      end
+      hard_added = apply_dedupe_updates(hard_updates, :hard)
+      soft_added = apply_dedupe_updates(soft_updates, :soft)
+
+      {hard_total + hard_added, soft_total + soft_added}
     end)
   end
 
-  defp find_existing_lead(organization_id, normalized_phone, normalized_name)
-       when is_binary(normalized_phone) and normalized_phone != "" do
-    base_query =
-      from(l in Backend.Leads.Lead,
-        where:
-          l.organization_id == ^organization_id and
-            l.normalized_phone_number == ^normalized_phone and
-            is_nil(l.merged_into_lead_id)
-      )
+  defp dedupe_match(row, leads_by_phone) do
+    case Map.get(leads_by_phone, row.normalized_phone_number, []) do
+      [] ->
+        :none
 
-    case normalized_name do
-      name when is_binary(name) and name != "" ->
-        hard_match =
-          base_query
-          |> where([l], l.normalized_student_name == ^name)
-          |> select([l], l.id)
-          |> limit(1)
-          |> Repo.one()
+      leads ->
+        name = row.normalized_student_name
 
-        if hard_match do
-          {:hard, hard_match}
+        if is_binary(name) and name != "" do
+          case Enum.find(leads, &(&1.normalized_student_name == name)) do
+            %{id: lead_id} -> {:hard, lead_id}
+            nil -> {:soft, hd(leads).id}
+          end
         else
-          soft_match =
-            base_query
-            |> select([l], l.id)
-            |> limit(1)
-            |> Repo.one()
-
-          if soft_match, do: {:soft, soft_match}, else: :none
+          {:soft, hd(leads).id}
         end
-
-      _ ->
-        soft_match =
-          base_query
-          |> select([l], l.id)
-          |> limit(1)
-          |> Repo.one()
-
-        if soft_match, do: {:soft, soft_match}, else: :none
     end
   end
-
-  defp find_existing_lead(_organization_id, _normalized_phone, _normalized_name), do: :none
 
   defp create_dedupe_candidates(job) do
     rows =
@@ -420,6 +388,157 @@ defmodule Backend.Imports do
           )
 
         count
+    end
+  end
+
+  defp fetch_existing_leads_by_phone(_organization_id, []), do: %{}
+
+  defp fetch_existing_leads_by_phone(organization_id, phones) do
+    phones =
+      phones
+      |> Enum.reject(&(&1 == "" or is_nil(&1)))
+      |> Enum.uniq()
+
+    phones
+    |> Enum.chunk_every(500)
+    |> Enum.flat_map(fn chunk ->
+      Repo.all(
+        from(l in Lead,
+          where:
+            l.organization_id == ^organization_id and
+              l.normalized_phone_number in ^chunk and
+              is_nil(l.merged_into_lead_id),
+          order_by: [desc: l.last_activity_at, desc: l.id],
+          select: {l.normalized_phone_number, l.id, l.normalized_student_name}
+        )
+      )
+    end)
+    |> Enum.group_by(
+      fn {phone, _id, _name} -> phone end,
+      fn {_phone, id, name} -> %{id: id, normalized_student_name: name} end
+    )
+  end
+
+  defp apply_dedupe_updates(updates, :hard) do
+    Enum.reduce(updates, 0, fn {lead_id, row_ids}, acc ->
+      {count, _} =
+        Repo.update_all(
+          from(r in ImportRow, where: r.id in ^row_ids),
+          set: [
+            dedupe_status: "hard",
+            dedupe_reason: "phone_name_match",
+            dedupe_matched_lead_id: lead_id,
+            assignment_status: "skipped",
+            assignment_error: %{error: "duplicate_lead"}
+          ]
+        )
+
+      acc + count
+    end)
+  end
+
+  defp apply_dedupe_updates(updates, :soft) do
+    Enum.reduce(updates, 0, fn {lead_id, row_ids}, acc ->
+      {count, _} =
+        Repo.update_all(
+          from(r in ImportRow, where: r.id in ^row_ids),
+          set: [
+            dedupe_status: "soft",
+            dedupe_reason: "phone_match",
+            dedupe_matched_lead_id: lead_id
+          ]
+        )
+
+      acc + count
+    end)
+  end
+
+  defp assign_rows_batch(rows, %{rules: rules, failures: failures, errors: errors} = acc) do
+    {rules, success_updates, failure_updates, changed_rules} =
+      Enum.reduce(rows, {rules, %{}, %{}, %{}}, fn row, {rules, success, failures_map, changed} ->
+        case Assignments.pick_counselor_cached(rules) do
+          {:ok, rule, updated_rules} ->
+            success = Map.update(success, rule.counselor_id, [row.id], &[row.id | &1])
+            changed = Map.put(changed, rule.id, rule)
+            {updated_rules, success, failures_map, changed}
+
+          {:error, reason, updated_rules} ->
+            reason_text = to_string(reason)
+            failures_map = Map.update(failures_map, reason_text, [row.id], &[row.id | &1])
+            {updated_rules, success, failures_map, changed}
+        end
+      end)
+
+    _assigned = apply_assignment_success(success_updates)
+    {failed_count, failure_errors} = apply_assignment_failures(failure_updates)
+
+    Enum.each(changed_rules, fn {_id, rule} ->
+      Assignments.update_rule_counters!(rule)
+    end)
+
+    %{
+      acc
+      | rules: rules,
+        failures: failures + failed_count,
+        errors: merge_error_counts(errors, failure_errors)
+    }
+  end
+
+  defp apply_assignment_success(assignments) do
+    Enum.reduce(assignments, 0, fn {counselor_id, row_ids}, acc ->
+      {count, _} =
+        Repo.update_all(
+          from(r in ImportRow, where: r.id in ^row_ids),
+          set: [
+            assigned_counselor_id: counselor_id,
+            assignment_status: "assigned",
+            assignment_error: nil
+          ]
+        )
+
+      acc + count
+    end)
+  end
+
+  defp apply_assignment_failures(failures) do
+    Enum.reduce(failures, {0, %{}}, fn {reason, row_ids}, {count, errors} ->
+      {updated, _} =
+        Repo.update_all(
+          from(r in ImportRow, where: r.id in ^row_ids),
+          set: [
+            assignment_status: "failed",
+            assignment_error: %{error: reason}
+          ]
+        )
+
+      {count + updated, Map.update(errors, reason, updated, &(&1 + updated))}
+    end)
+  end
+
+  defp merge_error_counts(current, additions) do
+    Map.merge(current, additions, fn _key, left, right -> left + right end)
+  end
+
+  defp reduce_in_batches(base_query, batch_size, acc, fun) do
+    do_reduce_in_batches(base_query, batch_size, 0, acc, fun)
+  end
+
+  defp do_reduce_in_batches(base_query, batch_size, last_id, acc, fun) do
+    rows =
+      base_query
+      |> where([r], r.id > ^last_id)
+      |> order_by([r], asc: r.id)
+      |> limit(^batch_size)
+      |> Repo.all()
+
+    case rows do
+      [] ->
+        acc
+
+      _ ->
+        acc = fun.(rows, acc)
+        next_last_id = List.last(rows).id
+        do_reduce_in_batches(base_query, batch_size, next_last_id, acc, fun)
     end
   end
 

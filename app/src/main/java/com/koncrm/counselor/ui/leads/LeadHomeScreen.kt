@@ -1,5 +1,7 @@
 package com.koncrm.counselor.ui.leads
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -7,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.koncrm.counselor.ui.leads.components.*
-import kotlinx.coroutines.launch
 
 // Premium gradient colors
 private val GradientStart = Color(0xFF6366F1)
@@ -79,13 +82,23 @@ fun LeadHomeScreen(
             LeadFilters(
                 searchQuery = uiState.searchQuery,
                 statusFilter = uiState.statusFilter,
+                universityFilter = uiState.universityFilter,
+                activityFilter = uiState.activityFilter,
+                followupFilter = uiState.followupFilter,
+                universities = uiState.universities,
+                isExpanded = uiState.isFilterExpanded,
                 onSearchChange = { viewModel.onEvent(LeadHomeEvent.UpdateSearchQuery(it)) },
                 onStatusChange = { viewModel.onEvent(LeadHomeEvent.UpdateStatusFilter(it)) },
+                onUniversityChange = { viewModel.onEvent(LeadHomeEvent.UpdateUniversityFilter(it)) },
+                onActivityChange = { viewModel.onEvent(LeadHomeEvent.UpdateActivityFilter(it)) },
+                onFollowupChange = { viewModel.onEvent(LeadHomeEvent.UpdateFollowupFilter(it)) },
+                onToggleExpanded = { viewModel.onEvent(LeadHomeEvent.ToggleFilterExpanded) },
+                onClearAll = { viewModel.onEvent(LeadHomeEvent.ClearAllFilters) },
                 onApply = { viewModel.onEvent(LeadHomeEvent.ApplyFilters) },
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Lead list
+            // Lead list with refresh header
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     uiState.isLoading && uiState.leads.isEmpty() -> {
@@ -99,47 +112,92 @@ fun LeadHomeScreen(
                         }
                     }
                     uiState.leads.isEmpty() -> {
-                        // Empty state
-                        Box(
+                        // Empty state with refresh
+                        Column(
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            Text(
+                                text = "No leads found",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.onSurface.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = "Adjust filters or refresh",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onSurface.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.onEvent(LeadHomeEvent.RefreshLeads) }
                             ) {
-                                Text(
-                                    text = "No leads found",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = colors.onSurface.copy(alpha = 0.6f)
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                Text(
-                                    text = "Try adjusting your filters",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = colors.onSurface.copy(alpha = 0.4f)
-                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Refresh")
                             }
                         }
                     }
                     else -> {
+                        val statusOrder = listOf("new", "follow_up", "contacted", "applied", "not_interested")
+                        val groupedLeads = remember(uiState.leads) {
+                            uiState.leads.groupBy { it.status.lowercase() }
+                        }
+                        val orderedSections = remember(groupedLeads) {
+                            val sections = mutableListOf<Pair<String, List<com.koncrm.counselor.leads.LeadSummary>>>()
+                            statusOrder.forEach { status ->
+                                val leads = groupedLeads[status]
+                                if (!leads.isNullOrEmpty()) {
+                                    sections.add(status to leads)
+                                }
+                            }
+                            // Add unknown statuses at the end
+                            (groupedLeads.keys - statusOrder.toSet()).forEach { status ->
+                                val leads = groupedLeads[status]
+                                if (!leads.isNullOrEmpty()) {
+                                    sections.add(status to leads)
+                                }
+                            }
+                            sections.toList()
+                        }
+
                         LazyColumn(
                             state = listState,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(bottom = 16.dp)
                         ) {
-                            items(
-                                items = uiState.leads,
-                                key = { it.id }
-                            ) { lead ->
-                                LeadCard(
-                                    lead = lead,
-                                    onSelect = { viewModel.onEvent(LeadHomeEvent.SelectLead(lead)) }
-                                )
+                            orderedSections.forEach { (status, leadsInGroup) ->
+                                item(key = "header_$status") {
+                                    LeadSectionHeader(
+                                        status = status,
+                                        count = leadsInGroup.size,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                }
+                                items(
+                                    items = leadsInGroup,
+                                    key = { it.id }
+                                ) { lead ->
+                                    LeadCard(
+                                        lead = lead,
+                                        onSelect = { viewModel.onEvent(LeadHomeEvent.SelectLead(lead)) },
+                                        onQuickCall = {
+                                            val intent = Intent(Intent.ACTION_DIAL).apply {
+                                                data = Uri.parse("tel:${lead.phoneNumber}")
+                                            }
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                }
                             }
 
                             // Load more trigger
                             if (uiState.hasMoreLeads && !uiState.isLoading) {
-                                item {
+                                item(key = "load_more") {
                                     LaunchedEffect(Unit) {
                                         viewModel.onEvent(LeadHomeEvent.LoadMoreLeads)
                                     }
@@ -158,6 +216,22 @@ fun LeadHomeScreen(
                                 }
                             }
                         }
+                    }
+                }
+                
+                // Refresh indicator overlay
+                if (uiState.isRefreshing) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = GradientStart,
+                            strokeWidth = 2.dp
+                        )
                     }
                 }
 
@@ -239,7 +313,9 @@ fun LeadHomeScreen(
                         onCallLogFilterChange = { viewModel.onEvent(LeadHomeEvent.UpdateCallLogFilter(it)) },
                         onLoadMoreCallLogs = { viewModel.onEvent(LeadHomeEvent.LoadMoreCallLogs) },
                         onDismiss = { viewModel.onEvent(LeadHomeEvent.ClearSelection) },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.85f)
                     )
                 }
             }

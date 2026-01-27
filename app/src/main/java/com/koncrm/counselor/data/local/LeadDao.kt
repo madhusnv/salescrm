@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -25,11 +26,25 @@ interface LeadDao {
     @Query("SELECT * FROM leads WHERE status = :status ORDER BY updatedAt DESC")
     fun getLeadsByStatus(status: String): Flow<List<LeadEntity>>
 
+    @Query("SELECT id, phoneNumber FROM leads")
+    suspend fun getLeadPhones(): List<LeadPhone>
+
+    @Query("SELECT COUNT(*) FROM leads")
+    suspend fun getLeadCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLead(lead: LeadEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLeads(leads: List<LeadEntity>)
+
+    @Transaction
+    suspend fun replaceLeads(leads: List<LeadEntity>) {
+        clearAll()
+        if (leads.isNotEmpty()) {
+            insertLeads(leads)
+        }
+    }
 
     @Update
     suspend fun updateLead(lead: LeadEntity)
@@ -64,3 +79,8 @@ interface PendingActionDao {
     @Query("SELECT COUNT(*) FROM pending_actions")
     fun getPendingCount(): Flow<Int>
 }
+
+data class LeadPhone(
+    val id: Long,
+    val phoneNumber: String
+)

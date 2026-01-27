@@ -6,11 +6,10 @@ defmodule BackendWeb.Api.CounselorStatsController do
     Backend.Access.Policy.lead_read_permissions()
   )
 
-  alias Backend.Accounts.Scope
   alias Backend.Reports
 
   def show(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     filter = Map.get(params, "filter", "today")
     date_range = Reports.date_range_for_filter(filter)
     stats = Reports.counselor_call_stats(scope, date_range)

@@ -26,7 +26,10 @@ class LeadApi(
         page: Int,
         pageSize: Int,
         status: String?,
-        search: String?
+        search: String?,
+        universityId: Long? = null,
+        activityFilter: String? = null,
+        followupFilter: String? = null
     ): Result<List<LeadSummary>> =
         withContext(Dispatchers.IO) {
             val params = mutableListOf(
@@ -38,6 +41,15 @@ class LeadApi(
             }
             if (!search.isNullOrBlank()) {
                 params.add("search=${java.net.URLEncoder.encode(search, "UTF-8")}")
+            }
+            if (universityId != null) {
+                params.add("university_id=${universityId}")
+            }
+            if (!activityFilter.isNullOrBlank()) {
+                params.add("activity_filter=${activityFilter}")
+            }
+            if (!followupFilter.isNullOrBlank()) {
+                params.add("followup_filter=${followupFilter}")
             }
             val request = Request.Builder()
                 .url("${baseUrl}/api/leads?${params.joinToString("&")}")

@@ -1,40 +1,18 @@
 package com.koncrm.counselor.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,337 +21,223 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.koncrm.counselor.network.ChannelEvent
-import com.koncrm.counselor.network.ChannelManager
-import com.koncrm.counselor.recordings.RecordingStore
-import com.koncrm.counselor.work.CallLogSyncStats
-import com.koncrm.counselor.work.CallLogSyncStore
-import com.koncrm.counselor.work.CallLogSyncWorker
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.koncrm.counselor.network.CounselorCallStats
+import com.koncrm.counselor.network.StatsApi
+import java.time.LocalTime
+
+// Premium color palette
+private val AccentOrange = Color(0xFFE67E22)
+private val AccentGreen = Color(0xFF10B981)
+private val AccentBlue = Color(0xFF3B82F6)
+private val AccentRed = Color(0xFFEF4444)
+private val AccentPurple = Color(0xFF8B5CF6)
 
 @Composable
 fun DashboardScreen(
     modifier: Modifier = Modifier,
-    onOpenCallStats: () -> Unit
+    onOpenCallStats: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
-
-    val syncStore = remember { CallLogSyncStore(context) }
-    val stats by syncStore.statsFlow().collectAsState(initial = CallLogSyncStats(null, 0, 0, 0))
-
-    val recordingStore = remember { RecordingStore(context) }
-    val recordingState by recordingStore.stateFlow().collectAsState(initial = null)
-
-    val isSyncing = remember { mutableStateOf(false) }
-
-    // Real-time channel connection
-    val channelManager = remember { ChannelManager.getInstance(context) }
-    val isChannelConnected by channelManager.isConnected.collectAsState()
-    val recentEvents = remember { mutableStateOf<List<String>>(emptyList()) }
-
-    // Listen for real-time events
+    
+    val statsApi = remember { StatsApi() }
+    val stats = remember { mutableStateOf<CounselorCallStats?>(null) }
+    val isLoading = remember { mutableStateOf(true) }
+    val error = remember { mutableStateOf<String?>(null) }
+    
+    // Load stats
     LaunchedEffect(Unit) {
-        channelManager.events.collect { event ->
-            when (event) {
-                is ChannelEvent.CallSynced -> {
-                    recentEvents.value = (listOf("📞 Call synced: ${event.phoneNumber}") + recentEvents.value).take(5)
-                }
-                is ChannelEvent.LeadUpdated -> {
-                    recentEvents.value = (listOf("📝 Lead updated: ${event.studentName}") + recentEvents.value).take(5)
-                }
-                is ChannelEvent.LeadAssigned -> {
-                    recentEvents.value = (listOf("🎯 New lead: ${event.studentName}") + recentEvents.value).take(5)
-                }
-                is ChannelEvent.RecordingUploaded -> {
-                    val duration = "${event.durationSeconds}s"
-                    recentEvents.value = (listOf("🎙️ Recording uploaded: $duration") + recentEvents.value).take(5)
-                }
-                is ChannelEvent.RecordingStatus -> {
-                    recentEvents.value = (listOf("🎙️ Recording ${event.status}") + recentEvents.value).take(5)
-                }
-                else -> {}
-            }
+        isLoading.value = true
+        statsApi.getCounselorStats("today")
+            .onSuccess { stats.value = it }
+            .onFailure { error.value = it.message }
+        isLoading.value = false
+    }
+    
+    // Time-based greeting
+    val greeting = remember {
+        when (LocalTime.now().hour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            else -> "Good evening"
         }
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        colors.primary.copy(alpha = 0.08f),
-                        colors.background,
-                        colors.background
-                    )
-                )
-            )
+            .background(colors.background)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(20.dp)
         ) {
-            // Header
-            Text(
-                text = "Dashboard",
-                style = MaterialTheme.typography.headlineLarge,
-                color = colors.onBackground,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Call sync & activity overview",
-                style = MaterialTheme.typography.bodyLarge,
-                color = colors.onBackground.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = colors.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Call Stats",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.onSurface,
-                        fontWeight = FontWeight.SemiBold
+            // Header with gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                AccentOrange.copy(alpha = 0.15f),
+                                colors.background
+                            )
+                        )
                     )
-                    Text(
-                        text = "See today’s calls, missed calls, and leads assigned.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                    Button(
-                        onClick = onOpenCallStats,
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
-                        modifier = Modifier.padding(top = 12.dp)
-                    ) {
-                        Text(text = "View Call Stats")
-                    }
-                }
-            }
-
-            // Sync Status Card
-            SyncStatusCard(
-                stats = stats,
-                isSyncing = isSyncing.value,
-                isChannelConnected = isChannelConnected,
-                onSyncNow = {
-                    isSyncing.value = true
-                    scope.launch {
-                        val request = OneTimeWorkRequestBuilder<CallLogSyncWorker>().build()
-                        WorkManager.getInstance(context).enqueue(request)
-                        kotlinx.coroutines.delay(2000)
-                        isSyncing.value = false
-                    }
-                }
-            )
-
-            // Recent Events (real-time)
-            if (recentEvents.value.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                RecentEventsCard(events = recentEvents.value)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Stats Grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.CheckCircle,
-                    iconColor = Color(0xFF4CAF50),
-                    value = stats.syncedCount.toString(),
-                    label = "Synced",
-                    sublabel = "calls uploaded"
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Refresh,
-                    iconColor = Color(0xFFFF9800),
-                    value = stats.duplicateCount.toString(),
-                    label = "Duplicates",
-                    sublabel = "already in system"
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Warning,
-                    iconColor = Color(0xFFF44336),
-                    value = stats.failureCount.toString(),
-                    label = "Failed",
-                    sublabel = "needs retry"
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Call,
-                    iconColor = colors.primary,
-                    value = (stats.syncedCount + stats.duplicateCount).toString(),
-                    label = "Total",
-                    sublabel = "calls processed"
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Recording Status
-            RecordingStatusSection(
-                consentGranted = recordingState?.consentGranted ?: false
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Quick Tips
-            QuickTipsCard()
-        }
-    }
-}
-
-@Composable
-private fun SyncStatusCard(
-    stats: CallLogSyncStats,
-    isSyncing: Boolean,
-    isChannelConnected: Boolean,
-    onSyncNow: () -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
-    val lastSyncFormatted = if ((stats.lastSyncedAt ?: 0L) > 0L) {
-        val formatter = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault())
-        formatter.format(Date(stats.lastSyncedAt ?: 0L))
-    } else {
-        "Never"
-    }
-
-    val statusColor = if (isChannelConnected) Color(0xFF4CAF50) else Color(0xFFFF9800)
-    val statusText = if (isChannelConnected) "Live" else "Offline"
-
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(24.dp)
             ) {
                 Column {
                     Text(
-                        text = "Call Sync",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onSurface
+                        text = "$greeting! 👋",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onBackground
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(statusColor)
-                        )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Quick summary
+                    if (stats.value != null) {
+                        val s = stats.value!!
+                        val summary = when {
+                            s.totalCalls == 0 -> "Ready to start your day? Make your first call!"
+                            s.missedCalls > 3 -> "You have ${s.missedCalls} missed calls to follow up"
+                            s.totalCalls > 10 -> "Great work! You've made ${s.totalCalls} calls today 🔥"
+                            else -> "You've made ${s.totalCalls} calls today"
+                        }
                         Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = statusColor,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(start = 6.dp)
+                            text = summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onBackground.copy(alpha = 0.7f)
                         )
                     }
-                }
-
-                Button(
-                    onClick = onSyncNow,
-                    enabled = !isSyncing,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primary,
-                        contentColor = colors.onPrimary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (isSyncing) "Syncing..." else "Sync Now",
-                        modifier = Modifier.padding(start = 8.dp),
-                        fontWeight = FontWeight.Medium
-                    )
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = colors.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = "Last sync",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.onSurface.copy(alpha = 0.5f)
+            
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                // Loading state
+                if (isLoading.value) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = AccentOrange)
+                    }
+                } else if (error.value != null) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = AccentRed.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Warning, null, tint = AccentRed)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Unable to load stats", color = AccentRed)
+                        }
+                    }
+                } else {
+                    val s = stats.value ?: CounselorCallStats(0, 0, 0, 0, 0, 0)
+                    
+                    // Today's Performance Card
+                    Text(
+                        text = "TODAY'S PERFORMANCE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onBackground.copy(alpha = 0.5f),
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Main stats grid
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MetricCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.Call,
+                            iconBackground = AccentBlue,
+                            value = s.totalCalls.toString(),
+                            label = "Total Calls"
                         )
-                        Text(
-                            text = lastSyncFormatted,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurface,
-                            fontWeight = FontWeight.Medium
+                        MetricCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.Phone,
+                            iconBackground = AccentGreen,
+                            value = s.outgoingCalls.toString(),
+                            label = "Calls Made"
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "Interval",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.onSurface.copy(alpha = 0.5f)
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MetricCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.Warning,
+                            iconBackground = AccentRed,
+                            value = s.missedCalls.toString(),
+                            label = "Missed",
+                            highlight = s.missedCalls > 0
                         )
-                        Text(
-                            text = "Every 15 min",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurface,
-                            fontWeight = FontWeight.Medium
+                        MetricCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.Person,
+                            iconBackground = AccentPurple,
+                            value = s.leadsAssigned.toString(),
+                            label = "New Leads"
                         )
                     }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Talk Time Card
+                    TalkTimeCard(durationSeconds = s.totalDurationSeconds)
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Quick Actions
+                    Text(
+                        text = "QUICK ACTIONS",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onBackground.copy(alpha = 0.5f),
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        QuickActionButton(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.Info,
+                            label = "View Stats",
+                            onClick = onOpenCallStats
+                        )
+                        QuickActionButton(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.DateRange,
+                            label = "Follow-ups",
+                            onClick = { /* TODO */ }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         }
@@ -381,20 +245,22 @@ private fun SyncStatusCard(
 }
 
 @Composable
-private fun StatCard(
+private fun MetricCard(
     modifier: Modifier = Modifier,
     icon: ImageVector,
-    iconColor: Color,
+    iconBackground: Color,
     value: String,
     label: String,
-    sublabel: String
+    highlight: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
-
+    
     Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
+        modifier = modifier.animateContentSize(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (highlight) iconBackground.copy(alpha = 0.08f) else colors.surface
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -402,88 +268,102 @@ private fun StatCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconColor.copy(alpha = 0.15f)),
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBackground.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(22.dp)
+                    tint = iconBackground,
+                    modifier = Modifier.size(24.dp)
                 )
             }
-
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = colors.onSurface,
-                modifier = Modifier.padding(top = 12.dp)
+                color = if (highlight) iconBackground else colors.onSurface
             )
-
+            
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = colors.onSurface
-            )
-
-            Text(
-                text = sublabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurface.copy(alpha = 0.5f)
+                color = colors.onSurface.copy(alpha = 0.6f)
             )
         }
     }
 }
 
 @Composable
-private fun RecordingStatusSection(consentGranted: Boolean) {
+private fun TalkTimeCard(durationSeconds: Long) {
     val colors = MaterialTheme.colorScheme
-
+    val hours = durationSeconds / 3600
+    val minutes = (durationSeconds % 3600) / 60
+    val secs = durationSeconds % 60
+    
+    val formatted = when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m ${secs}s"
+        else -> "${secs}s"
+    }
+    
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = AccentOrange.copy(alpha = 0.1f)
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Call Recording",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.onSurface
-                )
-                Text(
-                    text = if (consentGranted) "Consent given - recording enabled" else "Recording disabled",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (consentGranted) Color(0xFF4CAF50).copy(alpha = 0.15f)
-                        else colors.surfaceVariant
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(AccentOrange.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = AccentOrange,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (consentGranted) "Active" else "Off",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = if (consentGranted) Color(0xFF4CAF50) else colors.onSurface.copy(alpha = 0.6f)
+                    text = "Total Talk Time",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = formatted,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = AccentOrange
+                )
+            }
+            
+            // Mini progress indicator
+            if (durationSeconds > 0) {
+                val progress = minOf(durationSeconds.toFloat() / (60 * 60), 1f) // 1 hour target
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(48.dp),
+                    color = AccentOrange,
+                    trackColor = AccentOrange.copy(alpha = 0.2f),
+                    strokeWidth = 4.dp
                 )
             }
         }
@@ -491,97 +371,39 @@ private fun RecordingStatusSection(consentGranted: Boolean) {
 }
 
 @Composable
-private fun QuickTipsCard() {
+private fun QuickActionButton(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
-
-    Card(
+    
+    OutlinedCard(
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = colors.primary.copy(alpha = 0.08f)
-        )
+        colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "💡 Quick Tips",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.onSurface
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentOrange,
+                modifier = Modifier.size(28.dp)
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            TipItem("Calls sync automatically every 15 minutes")
-            TipItem("Use 'Sync Now' to force immediate sync")
-            TipItem("Enable recording consent in Settings for better lead tracking")
-        }
-    }
-}
-
-@Composable
-private fun TipItem(text: String) {
-    val colors = MaterialTheme.colorScheme
-
-    Row(
-        modifier = Modifier.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = "•",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.primary,
-            modifier = Modifier.padding(end = 8.dp, top = 2.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurface.copy(alpha = 0.8f)
-        )
-    }
-}
-
-@Composable
-private fun RecentEventsCard(events: List<String>) {
-    val colors = MaterialTheme.colorScheme
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = colors.primaryContainer.copy(alpha = 0.3f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF4CAF50))
-                )
-                Text(
-                    text = "Live Activity",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.onSurface,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            events.forEach { event ->
-                Text(
-                    text = event,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurface.copy(alpha = 0.8f),
-                    modifier = Modifier.padding(vertical = 2.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurface,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

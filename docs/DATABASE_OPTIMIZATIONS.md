@@ -145,6 +145,8 @@ order_by([l], [desc: l.last_activity_at, desc: l.id])
 | Phone dedupe lookup | Seq scan | Index scan |
 | Analytics dashboard | Memory-heavy | SQL aggregation |
 
+Note: Import processing now batches dedupe/assignment updates and caches assignment rules per job, cutting per-row DB round-trips on large imports.
+
 ---
 
 ## Monitoring Recommendations

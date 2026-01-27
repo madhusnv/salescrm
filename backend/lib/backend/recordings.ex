@@ -102,49 +102,70 @@ defmodule Backend.Recordings do
   def expire_old_recordings do
     cutoff = DateTime.utc_now(:second) |> DateTime.add(-365 * 24 * 60 * 60, :second)
 
-    CallRecording
-    |> where([r], r.recorded_at < ^cutoff and r.status == :uploaded)
-    |> Repo.all()
-    |> Enum.each(fn recording ->
-      if recording.storage_key do
-        target_path =
-          Path.join([:code.priv_dir(:backend), "static", "uploads", recording.storage_key])
+    base_query =
+      CallRecording
+      |> where([r], r.recorded_at < ^cutoff and r.status == :uploaded)
 
-        _ = File.rm(target_path)
-      end
+    expire_recordings_in_batches(base_query, 0, 200)
+  end
 
-      changes =
-        CallRecording.complete_changeset(recording, %{
-          status: "expired",
-          file_url: nil,
-          file_size_bytes: nil,
-          metadata: Map.put(recording.metadata || %{}, "expired_at", DateTime.utc_now(:second))
-        })
+  defp expire_recordings_in_batches(base_query, last_id, batch_size) do
+    recordings =
+      base_query
+      |> where([r], r.id > ^last_id)
+      |> order_by([r], asc: r.id)
+      |> limit(^batch_size)
+      |> Repo.all()
 
-      case Repo.update(changes) do
-        {:ok, updated} ->
-          _ =
-            Analytics.log_event_for_org(
-              updated.organization_id,
-              updated.branch_id,
-              "recording_expired",
-              %{lead_id: updated.lead_id}
-            )
+    case recordings do
+      [] ->
+        :ok
 
-          _ =
-            Audit.log_system(
-              updated.organization_id,
-              updated.branch_id,
-              "recording.expired",
-              %{recording_id: updated.id, lead_id: updated.lead_id}
-            )
+      _ ->
+        Enum.each(recordings, &expire_recording/1)
+        expire_recordings_in_batches(base_query, List.last(recordings).id, batch_size)
+    end
+  end
 
-          :ok
+  defp expire_recording(recording) do
+    if recording.storage_key do
+      target_path =
+        Path.join([:code.priv_dir(:backend), "static", "uploads", recording.storage_key])
 
-        _ ->
-          :error
-      end
-    end)
+      _ = File.rm(target_path)
+    end
+
+    changes =
+      CallRecording.complete_changeset(recording, %{
+        status: "expired",
+        file_url: nil,
+        file_size_bytes: nil,
+        metadata: Map.put(recording.metadata || %{}, "expired_at", DateTime.utc_now(:second))
+      })
+
+    case Repo.update(changes) do
+      {:ok, updated} ->
+        _ =
+          Analytics.log_event_for_org(
+            updated.organization_id,
+            updated.branch_id,
+            "recording_expired",
+            %{lead_id: updated.lead_id}
+          )
+
+        _ =
+          Audit.log_system(
+            updated.organization_id,
+            updated.branch_id,
+            "recording.expired",
+            %{recording_id: updated.id, lead_id: updated.lead_id}
+          )
+
+        :ok
+
+      _ ->
+        :error
+    end
   end
 
   defp maybe_put_file_url(recording, attrs) when is_map(attrs) do

@@ -3,11 +3,10 @@ defmodule BackendWeb.Api.UniversityController do
 
   plug(BackendWeb.Plugs.RequirePermission, Backend.Access.Policy.lead_read_permissions())
 
-  alias Backend.Accounts.Scope
   alias Backend.Organizations
 
   def index(conn, _params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     universities = Organizations.list_universities(scope.user.organization_id)
 
     json(conn, %{

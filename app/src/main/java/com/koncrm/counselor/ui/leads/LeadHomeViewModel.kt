@@ -9,13 +9,17 @@ import com.koncrm.counselor.network.LeadApi
 import com.koncrm.counselor.recordings.RecordingStore
 import com.koncrm.counselor.work.CallLogSyncStore
 import com.koncrm.counselor.work.CallNoteStore
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 
+@OptIn(FlowPreview::class)
 class LeadHomeViewModel(
     private val leadApi: LeadApi = LeadApi(),
     private val syncStore: CallLogSyncStore,
@@ -26,6 +30,8 @@ class LeadHomeViewModel(
     private val _uiState = MutableStateFlow(LeadHomeUiState())
     val uiState: StateFlow<LeadHomeUiState> = _uiState.asStateFlow()
 
+    private val searchQueryFlow = MutableStateFlow("")
+
     private val pageSize = 20
     private val callLogPageSize = 10
 
@@ -33,6 +39,19 @@ class LeadHomeViewModel(
         loadLeads(reset = true)
         loadUniversities()
         observeStores()
+        observeSearchQuery()
+    }
+
+    private fun observeSearchQuery() {
+        viewModelScope.launch {
+            searchQueryFlow
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { query ->
+                    _uiState.update { it.copy(searchQuery = query) }
+                    loadLeads(reset = true)
+                }
+        }
     }
 
     private fun observeStores() {
@@ -71,7 +90,13 @@ class LeadHomeViewModel(
             is LeadHomeEvent.ClearSelection -> clearSelection()
             is LeadHomeEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
             is LeadHomeEvent.UpdateStatusFilter -> updateStatusFilter(event.status)
+            is LeadHomeEvent.UpdateUniversityFilter -> updateUniversityFilter(event.universityId)
+            is LeadHomeEvent.UpdateActivityFilter -> updateActivityFilter(event.filter)
+            is LeadHomeEvent.UpdateFollowupFilter -> updateFollowupFilter(event.filter)
+            is LeadHomeEvent.ToggleFilterExpanded -> toggleFilterExpanded()
+            is LeadHomeEvent.ClearAllFilters -> clearAllFilters()
             is LeadHomeEvent.ApplyFilters -> loadLeads(reset = true)
+            is LeadHomeEvent.RefreshLeads -> refreshLeads()
             is LeadHomeEvent.LoadMoreLeads -> loadMoreLeads()
             is LeadHomeEvent.SelectTab -> selectTab(event.index)
             is LeadHomeEvent.UpdateNoteText -> updateNoteText(event.text)
@@ -108,13 +133,17 @@ class LeadHomeViewModel(
                 page = state.currentPage,
                 pageSize = pageSize,
                 status = state.statusFilter.ifBlank { null },
-                search = state.searchQuery.ifBlank { null }
+                search = state.searchQuery.ifBlank { null },
+                universityId = state.universityFilter,
+                activityFilter = state.activityFilter.ifBlank { null },
+                followupFilter = state.followupFilter.ifBlank { null }
             )
 
             result.onSuccess { leads ->
+                val sortedLeads = sortLeadsByPriority(leads)
                 _uiState.update { 
                     it.copy(
-                        leads = if (reset) leads else it.leads + leads,
+                        leads = if (reset) sortedLeads else sortLeadsByPriority(it.leads + sortedLeads),
                         hasMoreLeads = leads.size >= pageSize,
                         isLoading = false
                     )
@@ -179,11 +208,73 @@ class LeadHomeViewModel(
     }
 
     private fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        searchQueryFlow.value = query
     }
 
     private fun updateStatusFilter(status: String) {
         _uiState.update { it.copy(statusFilter = status) }
+        loadLeads(reset = true)
+    }
+
+    private fun updateUniversityFilter(universityId: Long?) {
+        _uiState.update { it.copy(universityFilter = universityId) }
+        loadLeads(reset = true)
+    }
+
+    private fun updateActivityFilter(filter: String) {
+        _uiState.update { it.copy(activityFilter = filter) }
+        loadLeads(reset = true)
+    }
+
+    private fun updateFollowupFilter(filter: String) {
+        _uiState.update { it.copy(followupFilter = filter) }
+        loadLeads(reset = true)
+    }
+
+    private fun toggleFilterExpanded() {
+        _uiState.update { it.copy(isFilterExpanded = !it.isFilterExpanded) }
+    }
+
+    private fun clearAllFilters() {
+        _uiState.update { 
+            it.copy(
+                statusFilter = "",
+                universityFilter = null,
+                activityFilter = "",
+                followupFilter = "",
+                searchQuery = ""
+            )
+        }
+        loadLeads(reset = true)
+    }
+
+    private fun refreshLeads() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            val state = _uiState.value
+            val result = leadApi.listLeads(
+                page = 1,
+                pageSize = pageSize,
+                status = state.statusFilter.ifBlank { null },
+                search = state.searchQuery.ifBlank { null },
+                universityId = state.universityFilter,
+                activityFilter = state.activityFilter.ifBlank { null },
+                followupFilter = state.followupFilter.ifBlank { null }
+            )
+            result.onSuccess { leads ->
+                val sortedLeads = sortLeadsByPriority(leads)
+                _uiState.update {
+                    it.copy(
+                        leads = sortedLeads,
+                        currentPage = 1,
+                        hasMoreLeads = leads.size >= pageSize,
+                        isRefreshing = false
+                    )
+                }
+            }.onFailure {
+                _uiState.update { it.copy(isRefreshing = false, error = "Failed to refresh") }
+            }
+        }
     }
 
     private fun selectTab(index: Int) {
@@ -398,6 +489,17 @@ class LeadHomeViewModel(
     private fun normalizePhone(phone: String): String {
         val digits = phone.filter { it.isDigit() }
         return if (digits.length > 10) digits.takeLast(10) else digits
+    }
+
+    private fun sortLeadsByPriority(leads: List<LeadSummary>): List<LeadSummary> {
+        val priorityOrder = mapOf(
+            "new" to 0,
+            "follow_up" to 1,
+            "contacted" to 2,
+            "applied" to 3,
+            "not_interested" to 4
+        )
+        return leads.sortedBy { priorityOrder[it.status.lowercase()] ?: 5 }
     }
 
     class Factory(

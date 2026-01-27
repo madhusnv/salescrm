@@ -3,10 +3,12 @@ package com.koncrm.counselor.data.repository
 import android.content.Context
 import com.koncrm.counselor.data.local.AppDatabase
 import com.koncrm.counselor.data.local.LeadEntity
+import com.koncrm.counselor.data.local.LeadPhone
 import com.koncrm.counselor.data.local.PendingActionEntity
 import com.koncrm.counselor.leads.LeadSummary
 import com.koncrm.counselor.leads.LeadDetail
 import com.koncrm.counselor.network.LeadApi
+import com.koncrm.counselor.util.LeadPhoneIndex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONObject
@@ -20,6 +22,7 @@ class LeadRepository(context: Context) {
     private val leadDao = database.leadDao()
     private val pendingDao = database.pendingActionDao()
     private val api = LeadApi()
+    private val cacheStore = LeadCacheStore(context)
 
     // --- Observable data from local database ---
 
@@ -42,30 +45,40 @@ class LeadRepository(context: Context) {
      */
     suspend fun syncLeads(): Result<Int> {
         return try {
-            val result = api.listLeads(
-                page = 1,
-                pageSize = 500,
-                status = null,
-                search = null
-            )
+            val allLeads = mutableListOf<LeadSummary>()
+            var page = 1
+            val pageSize = 500
 
-            result.fold(
-                onSuccess = { leads ->
-                    cacheLeads(leads)
-                    Result.success(leads.size)
-                },
-                onFailure = { error ->
-                    Result.failure(error)
+            while (true) {
+                val result = api.listLeads(
+                    page = page,
+                    pageSize = pageSize,
+                    status = null,
+                    search = null
+                )
+
+                val leads = result.getOrElse { error ->
+                    return Result.failure(error)
                 }
-            )
+
+                allLeads.addAll(leads)
+
+                if (leads.isEmpty() || leads.size < pageSize) {
+                    break
+                }
+                page += 1
+            }
+
+            cacheLeads(allLeads)
+            cacheStore.setLastSyncedAt(System.currentTimeMillis())
+            Result.success(allLeads.size)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     suspend fun cacheLeads(leads: List<LeadSummary>) {
-        if (leads.isEmpty()) return
-        leadDao.insertLeads(leads.map { it.toEntity() })
+        leadDao.replaceLeads(leads.map { it.toEntity() })
     }
 
     /**
@@ -95,6 +108,15 @@ class LeadRepository(context: Context) {
     suspend fun findByPhone(phoneNumber: String): LeadEntity? {
         val normalized = normalizePhone(phoneNumber)
         return leadDao.findByPhone("%$normalized%")
+    }
+
+    suspend fun getLeadCount(): Int = leadDao.getLeadCount()
+
+    suspend fun getLastSyncedAt(): Long? = cacheStore.getLastSyncedAt()
+
+    suspend fun buildPhoneIndex(): LeadPhoneIndex {
+        val leads: List<LeadPhone> = leadDao.getLeadPhones()
+        return LeadPhoneIndex.from(leads)
     }
 
     // --- Offline action queue ---

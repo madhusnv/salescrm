@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.koncrm.counselor.auth.SessionTokens
 import com.koncrm.counselor.ui.CallStatsScreen
 import com.koncrm.counselor.ui.DashboardScreen
-import com.koncrm.counselor.ui.LeadHomeScreen
+import com.koncrm.counselor.ui.leads.LeadHomeScreen
 import com.koncrm.counselor.ui.SettingsScreen
 
 sealed class BottomNavItem(

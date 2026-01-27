@@ -8,10 +8,13 @@ import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -31,8 +34,8 @@ import com.koncrm.counselor.network.ApiConfig
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-private val GradientStart = Color(0xFF6366F1)
-private val GradientEnd = Color(0xFF8B5CF6)
+private val AccentColor = Color(0xFFE67E22)
+private val AccentLight = Color(0xFFF39C12)
 private val IST_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 
 @Composable
@@ -62,30 +65,65 @@ fun LeadDetailCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val scrollState = rememberScrollState()
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            // Header with avatar, name, and close button
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(24.dp)
+        ) {
+            // Close button row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            colors.surfaceVariant.copy(alpha = 0.5f),
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = colors.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Avatar + Name section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // Avatar
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
+                        .background(
+                            Brush.linearGradient(
+                                listOf(AccentColor, AccentLight)
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = detail.lead.studentName.take(2).uppercase(),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -96,354 +134,355 @@ fun LeadDetailCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = detail.lead.studentName,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = colors.onSurface
+                        color = colors.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 4.dp)
-                    ) {
-                        // Call button
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = GradientStart.copy(alpha = 0.1f),
-                            modifier = Modifier.clickable {
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${detail.lead.phoneNumber}"))
-                                context.startActivity(intent)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Call,
-                                    contentDescription = "Call",
-                                    tint = GradientStart,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = detail.lead.phoneNumber,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = GradientStart,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Call button
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = AccentColor,
+                        modifier = Modifier.clickable {
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${detail.lead.phoneNumber}"))
+                            context.startActivity(intent)
                         }
-
-                        StatusPill(status = detail.lead.status)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Call",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = detail.lead.phoneNumber,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
-                }
-
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = colors.onSurface.copy(alpha = 0.5f)
-                    )
                 }
             }
 
-            // Stats chips
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Stats Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                StatCard(
+                    label = "Last Activity",
+                    value = formatShortDate(detail.lastActivityAt) ?: "—",
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    label = "Next Follow-up",
+                    value = formatShortDate(detail.nextFollowUpAt) ?: "—",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Status section
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurface.copy(alpha = 0.5f),
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Scrollable status buttons
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StatChip(
-                    title = "Last Activity",
-                    value = formatRelativeTime(detail.lastActivityAt) ?: "—",
-                    modifier = Modifier.weight(1f)
+                val statuses = listOf(
+                    "new" to "New",
+                    "contacted" to "Contacted",
+                    "follow_up" to "Follow up",
+                    "applied" to "Applied",
+                    "not_interested" to "Not interested"
                 )
-                StatChip(
-                    title = "Next Follow-up",
-                    value = formatRelativeTime(detail.nextFollowUpAt) ?: "—",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Status buttons
-            StatusButtonRow(
-                currentStatus = detail.lead.status,
-                isUpdating = isUpdatingStatus,
-                onUpdateStatus = onUpdateStatus
-            )
-
-            // Tabs
-            TabRow(
-                tabs = listOf("Notes", "Activity", "Follow-ups", "Calls", "Recordings"),
-                selectedIndex = selectedTab,
-                onSelected = onTabSelected
-            )
-
-            // Tab content
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            ) {
-                when (selectedTab) {
-                    0 -> NoteInput(
-                        noteText = noteText,
-                        isSaving = isSavingNote,
-                        onNoteChange = onNoteChange,
-                        onSubmit = onSubmitNote
+                statuses.forEach { (status, label) ->
+                    val isSelected = status == detail.lead.status
+                    StatusChip(
+                        label = label,
+                        isSelected = isSelected,
+                        enabled = !isSelected && !isUpdatingStatus,
+                        onClick = { onUpdateStatus(status) }
                     )
-                    1 -> ActivityList(activities = detail.activities)
-                    2 -> FollowupTab(
-                        followups = detail.followups,
-                        dueAtMillis = followupDueAtMillis,
-                        note = followupNote,
-                        isSaving = isSchedulingFollowup,
-                        onPickDate = onPickFollowupDate,
-                        onNoteChange = onFollowupNoteChange,
-                        onSchedule = onScheduleFollowup
-                    )
-                    3 -> CallLogTab(
-                        callLogs = callLogs,
-                        filter = callLogFilter,
-                        hasMore = hasMoreCallLogs,
-                        onFilterChange = onCallLogFilterChange,
-                        onLoadMore = onLoadMoreCallLogs
-                    )
-                    4 -> RecordingTab(recordings = detail.recordings)
                 }
             }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Tabs - scrollable
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val tabs = listOf("Activity", "Follow-ups", "Calls", "Recordings")
+                tabs.forEachIndexed { index, title ->
+                    val isSelected = index == selectedTab
+                    TabChip(
+                        label = title,
+                        isSelected = isSelected,
+                        onClick = { onTabSelected(index) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.3f))
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Tab content
+            when (selectedTab) {
+                0 -> ActivitySection(
+                    activities = detail.activities,
+                    noteText = noteText,
+                    isSaving = isSavingNote,
+                    onNoteChange = onNoteChange,
+                    onSubmit = onSubmitNote
+                )
+                1 -> FollowupSection(
+                    followups = detail.followups,
+                    dueAtMillis = followupDueAtMillis,
+                    note = followupNote,
+                    isSaving = isSchedulingFollowup,
+                    onPickDate = onPickFollowupDate,
+                    onNoteChange = onFollowupNoteChange,
+                    onSchedule = onScheduleFollowup
+                )
+                2 -> CallsSection(
+                    callLogs = callLogs,
+                    filter = callLogFilter,
+                    hasMore = hasMoreCallLogs,
+                    onFilterChange = onCallLogFilterChange,
+                    onLoadMore = onLoadMoreCallLogs
+                )
+                3 -> RecordingsSection(recordings = detail.recordings)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun StatChip(
-    title: String,
+private fun StatCard(
+    label: String,
     value: String,
     modifier: Modifier = Modifier
 ) {
-    val displayValue = if (value.isBlank() || value == "null") "—" else value
-
+    val colors = MaterialTheme.colorScheme
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(16.dp),
+        color = colors.surfaceVariant.copy(alpha = 0.4f)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                letterSpacing = 0.5.sp
-            )
-            Text(
-                text = displayValue,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusButtonRow(
-    currentStatus: String,
-    isUpdating: Boolean,
-    onUpdateStatus: (String) -> Unit
-) {
-    val statuses = listOf(
-        "new" to "New",
-        "contacted" to "Contacted",
-        "follow_up" to "Follow up",
-        "applied" to "Applied",
-        "not_interested" to "Not interested"
-    )
-
-    LazyRow(
-        modifier = Modifier.padding(top = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(statuses.size) { index ->
-            val (status, label) = statuses[index]
-            val isSelected = status == currentStatus
-
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) GradientStart else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                shadowElevation = if (isSelected) 4.dp else 0.dp,
-                modifier = Modifier.clickable(enabled = !isSelected && !isUpdating) {
-                    onUpdateStatus(status)
-                }
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TabRow(
-    tabs: List<String>,
-    selectedIndex: Int,
-    onSelected: (Int) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .padding(top = 20.dp)
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
-            tabs.forEachIndexed { index, title ->
-                val isSelected = index == selectedIndex
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onSelected(index) },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) GradientStart else Color.Transparent,
-                    shadowElevation = if (isSelected) 2.dp else 0.dp
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .padding(vertical = 10.dp)
-                            .fillMaxWidth()
-                            .wrapContentWidth(Alignment.CenterHorizontally)
-                    )
-                }
-            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurface.copy(alpha = 0.5f),
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
-private fun NoteInput(
+private fun StatusChip(
+    label: String,
+    isSelected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = if (isSelected) AccentColor else colors.surfaceVariant,
+        shadowElevation = if (isSelected) 4.dp else 0.dp,
+        modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSelected) Color.White else colors.onSurface.copy(alpha = 0.7f),
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+        )
+    }
+}
+
+@Composable
+private fun TabChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) AccentColor else Color.Transparent,
+        border = if (!isSelected) ButtonDefaults.outlinedButtonBorder(enabled = true) else null,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSelected) Color.White else colors.onSurface.copy(alpha = 0.6f),
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+        )
+    }
+}
+
+@Composable
+private fun ActivitySection(
+    activities: List<LeadActivity>,
     noteText: String,
     isSaving: Boolean,
     onNoteChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
-    Column {
+    val colors = MaterialTheme.colorScheme
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Add note input
         OutlinedTextField(
             value = noteText,
             onValueChange = onNoteChange,
             placeholder = { Text("Add a note...") },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GradientStart,
-                cursorColor = GradientStart
+                focusedBorderColor = AccentColor,
+                cursorColor = AccentColor
             ),
-            minLines = 3,
-            maxLines = 5
+            minLines = 2,
+            maxLines = 4
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.End
+        Button(
+            onClick = onSubmit,
+            enabled = noteText.isNotBlank() && !isSaving,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+            modifier = Modifier.align(Alignment.End)
         ) {
-            Button(
-                onClick = onSubmit,
-                enabled = noteText.isNotBlank() && !isSaving,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = GradientStart)
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(if (isSaving) "Saving..." else "Save Note")
+            if (isSaving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
             }
+            Text(if (isSaving) "Saving..." else "Save Note")
         }
-    }
-}
 
-@Composable
-private fun ActivityList(activities: List<LeadActivity>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (activities.isEmpty()) {
-            EmptyState("No activity yet")
-        } else {
+        if (activities.isNotEmpty()) {
+            Text(
+                text = "Recent Activity",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurface.copy(alpha = 0.5f),
+                fontWeight = FontWeight.SemiBold
+            )
+
             activities.take(5).forEach { activity ->
                 ActivityItem(activity)
             }
+        } else {
+            EmptyState("No activity yet")
         }
     }
 }
 
 @Composable
 private fun ActivityItem(activity: LeadActivity) {
+    val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(10.dp)
+                colors.surfaceVariant.copy(alpha = 0.3f),
+                RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.Top
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(10.dp)
                 .clip(CircleShape)
-                .background(GradientStart)
+                .background(AccentColor)
                 .offset(y = 4.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = activity.type.replace("_", " ").replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = colors.onSurface
             )
             activity.body?.let { body ->
                 Text(
                     text = body,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 2.dp)
+                    color = colors.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = 4.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
-        formatRelativeTime(activity.occurredAt)?.let { time ->
+        formatShortDate(activity.occurredAt)?.let { time ->
             Text(
                 text = time,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                color = colors.onSurface.copy(alpha = 0.4f)
             )
         }
     }
 }
 
 @Composable
-private fun FollowupTab(
+private fun FollowupSection(
     followups: List<LeadFollowup>,
     dueAtMillis: Long?,
     note: String,
@@ -452,34 +491,32 @@ private fun FollowupTab(
     onNoteChange: (String) -> Unit,
     onSchedule: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Existing followups
-        if (followups.isNotEmpty()) {
-            followups.take(3).forEach { followup ->
-                FollowupItem(followup)
-            }
-        }
+    val colors = MaterialTheme.colorScheme
 
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Schedule new followup
         Text(
             text = "Schedule Follow-up",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp)
+            color = colors.onSurface
         )
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        OutlinedButton(
+            onClick = onPickDate,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedButton(
-                onClick = onPickDate,
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(formatEpochMillis(dueAtMillis) ?: "Pick date & time")
-            }
+            Icon(
+                Icons.Default.DateRange,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = formatEpochMillis(dueAtMillis) ?: "Pick date & time",
+                fontWeight = FontWeight.Medium
+            )
         }
 
         OutlinedTextField(
@@ -487,46 +524,71 @@ private fun FollowupTab(
             onValueChange = onNoteChange,
             placeholder = { Text("Optional note") },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            minLines = 2
         )
 
         Button(
             onClick = onSchedule,
             enabled = dueAtMillis != null && !isSaving,
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = GradientStart)
+            colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+            modifier = Modifier.fillMaxWidth()
         ) {
             if (isSaving) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(if (isSaving) "Scheduling..." else "Schedule")
+            Text(if (isSaving) "Scheduling..." else "Schedule Follow-up")
+        }
+
+        if (followups.isNotEmpty()) {
+            HorizontalDivider(
+                color = colors.outlineVariant.copy(alpha = 0.3f),
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Text(
+                text = "Scheduled",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurface.copy(alpha = 0.5f),
+                fontWeight = FontWeight.SemiBold
+            )
+
+            followups.take(3).forEach { followup ->
+                FollowupItem(followup)
+            }
         }
     }
 }
 
 @Composable
 private fun FollowupItem(followup: LeadFollowup) {
+    val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(10.dp)
+                colors.surfaceVariant.copy(alpha = 0.3f),
+                RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.DateRange,
             contentDescription = null,
-            tint = GradientStart,
-            modifier = Modifier.size(18.dp)
+            tint = AccentColor,
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = formatRelativeTime(followup.dueAt) ?: "—",
+                text = formatShortDate(followup.dueAt) ?: "—",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
@@ -534,7 +596,9 @@ private fun FollowupItem(followup: LeadFollowup) {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = colors.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -543,32 +607,31 @@ private fun FollowupItem(followup: LeadFollowup) {
 }
 
 @Composable
-private fun CallLogTab(
+private fun CallsSection(
     callLogs: List<CallLogEntry>,
     filter: String,
     hasMore: Boolean,
     onFilterChange: (String) -> Unit,
     onLoadMore: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Filter chips
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             val filters = listOf("" to "All", "incoming" to "Incoming", "outgoing" to "Outgoing", "missed" to "Missed")
-            items(filters.size) { index ->
-                val (value, label) = filters[index]
+            filters.forEach { (value, label) ->
                 val isSelected = filter == value
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isSelected) GradientStart.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.clickable { onFilterChange(value) }
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isSelected) GradientStart else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onFilterChange(value) },
+                    label = { Text(label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentColor,
+                        selectedLabelColor = Color.White
                     )
-                }
+                )
             }
         }
 
@@ -581,8 +644,11 @@ private fun CallLogTab(
                 CallLogItem(call)
             }
             if (hasMore) {
-                TextButton(onClick = onLoadMore) {
-                    Text("Load more", color = GradientStart)
+                TextButton(
+                    onClick = onLoadMore,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Load more", color = AccentColor, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -591,30 +657,31 @@ private fun CallLogTab(
 
 @Composable
 private fun CallLogItem(call: CallLogEntry) {
+    val colors = MaterialTheme.colorScheme
     val iconColor = when (call.callType) {
         "incoming" -> Color(0xFF10B981)
         "outgoing" -> Color(0xFF3B82F6)
         "missed" -> Color(0xFFEF4444)
-        else -> MaterialTheme.colorScheme.onSurface
+        else -> colors.onSurface
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(10.dp)
+                colors.surfaceVariant.copy(alpha = 0.3f),
+                RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Call,
             contentDescription = call.callType,
             tint = iconColor,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = call.callType.replaceFirstChar { it.uppercase() },
@@ -622,23 +689,24 @@ private fun CallLogItem(call: CallLogEntry) {
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = formatRelativeTime(call.startedAt) ?: "—",
+                text = formatShortDate(call.startedAt) ?: "—",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                color = colors.onSurface.copy(alpha = 0.5f)
             )
         }
         Text(
-            text = "${call.durationSeconds ?: 0}s",
+            text = formatDuration(call.durationSeconds ?: 0),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            color = colors.onSurface.copy(alpha = 0.6f),
+            fontWeight = FontWeight.Medium
         )
     }
 }
 
 @Composable
-private fun RecordingTab(recordings: List<RecordingEntry>) {
+private fun RecordingsSection(recordings: List<RecordingEntry>) {
     val context = LocalContext.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (recordings.isEmpty()) {
             EmptyState("No recordings")
         } else {
@@ -651,46 +719,56 @@ private fun RecordingTab(recordings: List<RecordingEntry>) {
 
 @Composable
 private fun RecordingItem(recording: RecordingEntry, context: Context) {
+    val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(10.dp)
+                colors.surfaceVariant.copy(alpha = 0.3f),
+                RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = null,
-            tint = GradientStart,
-            modifier = Modifier.size(18.dp)
+            tint = AccentColor,
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${recording.durationSeconds ?: 0}s recording",
+                text = formatDuration(recording.durationSeconds ?: 0) + " recording",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = formatRelativeTime(recording.recordedAt) ?: "—",
+                text = formatShortDate(recording.recordedAt) ?: "—",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                color = colors.onSurface.copy(alpha = 0.5f)
             )
         }
         recording.fileUrl?.let { url ->
-            TextButton(
+            FilledTonalButton(
                 onClick = {
                     val fullUrl = if (url.startsWith("http")) url else "${ApiConfig.BASE_URL}$url"
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fullUrl))
                     context.startActivity(intent)
-                }
+                },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = AccentColor.copy(alpha = 0.15f)
+                )
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Play",
+                    modifier = Modifier.size(16.dp),
+                    tint = AccentColor
+                )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Play", color = GradientStart)
+                Text("Play", color = AccentColor, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -701,19 +779,19 @@ private fun EmptyState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 24.dp),
+            .padding(vertical = 32.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
         )
     }
 }
 
 // Utility functions
-private fun formatRelativeTime(isoString: String?): String? {
+private fun formatShortDate(isoString: String?): String? {
     if (isoString.isNullOrBlank() || isoString == "null") return null
     return try {
         val instant = Instant.parse(isoString)
@@ -729,6 +807,12 @@ private fun formatEpochMillis(millis: Long?): String? {
     val instant = Instant.ofEpochMilli(millis)
     val formatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm").withZone(IST_ZONE)
     return formatter.format(instant)
+}
+
+private fun formatDuration(seconds: Long): String {
+    val mins = seconds / 60
+    val secs = seconds % 60
+    return if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
 }
 
 fun pickFollowupDateTime(

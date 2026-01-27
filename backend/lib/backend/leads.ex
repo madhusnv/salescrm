@@ -39,6 +39,13 @@ defmodule Backend.Leads do
     |> Repo.get!(id)
   end
 
+  def get_lead(%Scope{} = scope, id) do
+    Lead
+    |> scope_query(scope)
+    |> preload([:assigned_counselor, :university, :branch])
+    |> Repo.get(id)
+  end
+
   def change_lead(%Lead{} = lead, attrs \\ %{}) do
     Lead.changeset(lead, attrs)
   end
@@ -95,6 +102,7 @@ defmodule Backend.Leads do
         %LeadActivity{lead_id: lead.id, user_id: scope.user.id}
         |> LeadActivity.changeset(activity_attrs)
         |> Repo.insert!()
+        |> Repo.preload(:user)
 
       {lead, activity}
     end)
@@ -127,6 +135,7 @@ defmodule Backend.Leads do
           occurred_at: occurred_at
         })
         |> Repo.insert!()
+        |> Repo.preload(:user)
 
       lead =
         lead
@@ -235,6 +244,7 @@ defmodule Backend.Leads do
         %LeadFollowup{lead_id: lead.id, user_id: scope.user.id}
         |> LeadFollowup.changeset(attrs)
         |> Repo.insert!()
+        |> Repo.preload(:user)
 
       lead =
         lead
@@ -252,6 +262,7 @@ defmodule Backend.Leads do
         %LeadActivity{lead_id: lead.id, user_id: scope.user.id}
         |> LeadActivity.changeset(activity_attrs)
         |> Repo.insert!()
+        |> Repo.preload(:user)
 
       {lead, followup, activity}
     end)
@@ -419,6 +430,9 @@ defmodule Backend.Leads do
     |> maybe_filter_status(filters)
     |> maybe_filter_search(filters)
     |> maybe_filter_counselor(filters)
+    |> maybe_filter_university(filters)
+    |> maybe_filter_activity(filters)
+    |> maybe_filter_followup(filters)
   end
 
   defp maybe_filter_merged(query, %{"include_merged" => include}) when is_binary(include) do
@@ -548,6 +562,67 @@ defmodule Backend.Leads do
   end
 
   defp maybe_filter_counselor(query, _), do: query
+
+  defp maybe_filter_university(query, %{"university_id" => university_id})
+       when is_binary(university_id) do
+    case Integer.parse(university_id) do
+      {id, _} -> where(query, [l], l.university_id == ^id)
+      :error -> query
+    end
+  end
+
+  defp maybe_filter_university(query, _), do: query
+
+  defp maybe_filter_activity(query, %{"activity_filter" => filter}) when is_binary(filter) do
+    now = DateTime.utc_now()
+
+    case String.downcase(String.trim(filter)) do
+      "today" ->
+        start_of_day = now |> DateTime.to_date() |> DateTime.new!(~T[00:00:00])
+        where(query, [l], l.last_activity_at >= ^start_of_day)
+
+      "week" ->
+        week_ago = DateTime.add(now, -7, :day)
+        where(query, [l], l.last_activity_at >= ^week_ago)
+
+      "stale" ->
+        three_days_ago = DateTime.add(now, -3, :day)
+        where(query, [l], l.last_activity_at < ^three_days_ago or is_nil(l.last_activity_at))
+
+      _ ->
+        query
+    end
+  end
+
+  defp maybe_filter_activity(query, _), do: query
+
+  defp maybe_filter_followup(query, %{"followup_filter" => filter}) when is_binary(filter) do
+    now = DateTime.utc_now()
+    today = DateTime.to_date(now)
+
+    case String.downcase(String.trim(filter)) do
+      "overdue" ->
+        where(query, [l], not is_nil(l.next_follow_up_at) and l.next_follow_up_at < ^now)
+
+      "due_today" ->
+        start_of_day = DateTime.new!(today, ~T[00:00:00])
+        end_of_day = DateTime.new!(today, ~T[23:59:59])
+
+        where(
+          query,
+          [l],
+          l.next_follow_up_at >= ^start_of_day and l.next_follow_up_at <= ^end_of_day
+        )
+
+      "upcoming" ->
+        where(query, [l], not is_nil(l.next_follow_up_at) and l.next_follow_up_at > ^now)
+
+      _ ->
+        query
+    end
+  end
+
+  defp maybe_filter_followup(query, _), do: query
 
   defp next_followup_due_at(lead_id) do
     LeadFollowup

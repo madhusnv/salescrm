@@ -28,49 +28,62 @@ defmodule BackendWeb.Api.RecordingController do
     when action in [:index]
   )
 
-  alias Backend.Accounts.Scope
   alias Backend.Audit
+  alias Backend.Leads
   alias Backend.Recordings
 
   def init(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     content_type = Map.get(params, "content_type", "audio/m4a")
+    lead_id = parse_int(Map.get(params, "lead_id"), nil)
 
     if content_type not in @allowed_content_types do
       conn
       |> put_status(:unprocessable_entity)
       |> json(%{error: "invalid_content_type", allowed: @allowed_content_types})
     else
-      attrs = %{
-        "lead_id" => Map.get(params, "lead_id"),
-        "call_log_id" => Map.get(params, "call_log_id"),
-        "content_type" => content_type,
-        "consent_granted" => Map.get(params, "consent_granted", false),
-        "recorded_at" => parse_datetime(Map.get(params, "recorded_at")),
-        "storage_key" => build_storage_key(scope.user.id, content_type)
-      }
+      lead =
+        case lead_id do
+          nil -> nil
+          _ -> Leads.get_lead(scope, lead_id)
+        end
 
-      case Recordings.init_recording(scope, attrs) do
-        {:ok, recording} ->
-          json(conn, %{
-            data: %{
-              id: recording.id,
-              upload_url: placeholder_upload_url(recording.id),
-              upload_headers: %{},
-              storage_key: recording.storage_key
-            }
-          })
+      if is_nil(lead) do
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "lead_required"})
+      else
+        attrs = %{
+          "lead_id" => lead.id,
+          "call_log_id" => Map.get(params, "call_log_id"),
+          "content_type" => content_type,
+          "consent_granted" => Map.get(params, "consent_granted", false),
+          "recorded_at" => parse_datetime(Map.get(params, "recorded_at")),
+          "storage_key" => build_storage_key(scope.user.id, content_type)
+        }
 
-        {:error, changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: errors_on(changeset)})
+        case Recordings.init_recording(scope, attrs) do
+          {:ok, recording} ->
+            json(conn, %{
+              data: %{
+                id: recording.id,
+                upload_url: placeholder_upload_url(recording.id),
+                upload_headers: %{},
+                storage_key: recording.storage_key
+              }
+            })
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: errors_on(changeset)})
+        end
       end
     end
   end
 
   def complete(conn, %{"id" => id} = params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
 
     attrs = %{
       "status" => Map.get(params, "status", "uploaded"),
@@ -99,7 +112,7 @@ defmodule BackendWeb.Api.RecordingController do
   end
 
   def upload(conn, %{"id" => id}) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
 
     with recording when not is_nil(recording) <- Recordings.get_recording(scope, id),
          :ok <- authorize_recording(scope, recording),
@@ -161,7 +174,7 @@ defmodule BackendWeb.Api.RecordingController do
   end
 
   def index(conn, params) do
-    scope = Scope.for_user(conn.assigns.current_user)
+    scope = conn.assigns.current_scope
     lead_id = parse_int(Map.get(params, "lead_id"), nil)
 
     if is_nil(lead_id) do

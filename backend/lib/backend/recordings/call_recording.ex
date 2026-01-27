@@ -45,7 +45,8 @@ defmodule Backend.Recordings.CallRecording do
       :organization_id,
       :branch_id,
       :counselor_id,
-      :status
+      :status,
+      :lead_id
     ])
     |> validate_length(:storage_key, max: 255)
   end

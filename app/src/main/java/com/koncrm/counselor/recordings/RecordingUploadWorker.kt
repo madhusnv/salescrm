@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.koncrm.counselor.auth.SessionStore
-import com.koncrm.counselor.network.LeadApi
+import com.koncrm.counselor.data.repository.LeadRepository
 import kotlinx.coroutines.flow.firstOrNull
 import java.io.File
 import java.time.Instant
+
+private const val LEAD_CACHE_MAX_AGE_MS = 60 * 60 * 1000L
 
 class RecordingUploadWorker(
     appContext: Context,
@@ -16,7 +18,7 @@ class RecordingUploadWorker(
     override suspend fun doWork(): Result {
         val sessionStore = SessionStore(applicationContext)
         val session = sessionStore.sessionFlow.firstOrNull() ?: return Result.retry()
-        
+
         // Initialize AuthenticatedHttpClient for this worker context
         com.koncrm.counselor.network.AuthenticatedHttpClient.init(sessionStore)
 
@@ -31,13 +33,31 @@ class RecordingUploadWorker(
         val file = File(filePath)
         if (!file.exists()) return Result.failure()
 
-        if (leadId == null && !phoneNumber.isNullOrBlank()) {
-            val leadApi = LeadApi()
-            val lookup = leadApi.findLeadIdByPhone(phoneNumber)
-            leadId = lookup.getOrNull()
+        val recordingStore = RecordingStore(applicationContext)
+
+        val leadRepository = LeadRepository(applicationContext)
+        if (leadId == null) {
+            val lastLeadSyncAt = leadRepository.getLastSyncedAt()
+            val now = System.currentTimeMillis()
+            val cacheStale = lastLeadSyncAt == null || now - lastLeadSyncAt > LEAD_CACHE_MAX_AGE_MS
+            if (cacheStale) {
+                val leadSync = leadRepository.syncLeads()
+                if (leadSync.isFailure) {
+                    return Result.retry()
+                }
+            }
         }
 
-        val recordingStore = RecordingStore(applicationContext)
+        if (leadId == null && !phoneNumber.isNullOrBlank()) {
+            val leadIndex = leadRepository.buildPhoneIndex()
+            leadId = leadIndex.findLeadId(phoneNumber)
+        }
+
+        if (leadId == null) {
+            recordingStore.setStatus("skipped", file.name, "No matching lead")
+            return Result.success()
+        }
+
         recordingStore.setStatus("uploading", file.name)
 
         val manager = RecordingUploadManager()

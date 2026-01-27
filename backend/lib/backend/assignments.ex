@@ -46,18 +46,7 @@ defmodule Backend.Assignments do
   end
 
   def pick_counselor(organization_id, branch_id, university_id) do
-    query =
-      AssignmentRule
-      |> where(
-        [r],
-        r.organization_id == ^organization_id and
-          r.university_id == ^university_id and
-          r.is_active == true
-      )
-      |> maybe_filter_branch(branch_id)
-      |> order_by([r], desc: r.priority, asc: r.last_assigned_at, asc: r.assigned_count)
-
-    rules = Repo.all(from(r in query, limit: 50))
+    rules = list_assignment_candidates(organization_id, branch_id, university_id)
 
     case {rules, pick_available_rule(rules)} do
       {[], _} ->
@@ -77,6 +66,45 @@ defmodule Backend.Assignments do
       {_, :none} ->
         {:error, :no_available_counselors}
     end
+  end
+
+  def list_assignment_candidates(organization_id, branch_id, university_id) do
+    AssignmentRule
+    |> where(
+      [r],
+      r.organization_id == ^organization_id and
+        r.university_id == ^university_id and
+        r.is_active == true
+    )
+    |> maybe_filter_branch(branch_id)
+    |> order_by([r], desc: r.priority, asc: r.last_assigned_at, asc: r.assigned_count)
+    |> limit(50)
+    |> Repo.all()
+  end
+
+  def pick_counselor_cached(rules) when is_list(rules) do
+    case pick_available_rule(rules) do
+      {:ok, rule, next_count} ->
+        updated_rule = %{
+          rule
+          | assigned_count: next_count,
+            last_assigned_at: DateTime.utc_now(:second)
+        }
+
+        {:ok, updated_rule, replace_rule(rules, updated_rule)}
+
+      :none ->
+        {:error, :no_available_counselors, rules}
+    end
+  end
+
+  def update_rule_counters!(%AssignmentRule{} = rule) do
+    rule
+    |> AssignmentRule.system_changeset(%{
+      assigned_count: rule.assigned_count,
+      last_assigned_at: rule.last_assigned_at
+    })
+    |> Repo.update!()
   end
 
   defp apply_filters(query, %{"university_id" => university_id}) when university_id != "" do
@@ -136,5 +164,15 @@ defmodule Backend.Assignments do
     datetime
     |> DateTime.add(19_800, :second)
     |> DateTime.to_date()
+  end
+
+  defp replace_rule(rules, updated_rule) do
+    Enum.map(rules, fn rule ->
+      if rule.id == updated_rule.id do
+        updated_rule
+      else
+        rule
+      end
+    end)
   end
 end
